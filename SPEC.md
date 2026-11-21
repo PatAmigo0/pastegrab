@@ -475,7 +475,7 @@ The token and your chat ID come from your password manager at build time, into e
 1. It reads the machine: the Windows version and build through `RtlGetVersion`, the native architecture through `GetNativeSystemInfo`, the CPU name and features, RAM, free space, whether the system disk has a seek penalty, the screen size, and whether `ucrtbase.dll` exists.
 2. It checks the floor, 64-bit Windows 8.0 or newer. A 32-bit PC gets a plain Russian explanation instead of Windows' cryptic error about an invalid Win32 application. The release manifest has room for an x86 variant, which his PC doesn't need. Then it tunes defaults: parallel downloads from RAM, the x264 preset from the core count, the height cap from the screen.
 3. It downloads that variant and its tools from our release over rustls and checks every SHA-256 against a manifest signed with minisign, whose private key never leaves your password manager. It installs per-user, with no admin rights and no UAC prompt.
-4. If `ucrtbase.dll` is missing and yt-dlp's Python needs it, the UCRT DLLs go next to yt-dlp. Microsoft supports this app-local UCRT on Windows 7 to 8.1, and it needs no admin rights either.
+4. If `ucrtbase.dll` is missing and yt-dlp's Python needs it, the UCRT DLLs go next to yt-dlp. Microsoft supports this app-local UCRT on Windows 7 to 8.1, and it needs no admin rights either. The fallback is Microsoft's VC++ redistributable, which installs the UCRT system-wide down to Windows 8.0, behind a UAC prompt.
 5. It writes `deploy.json` with the machine profile and the path and version of every tool. The app reads that file at startup instead of probing hardware on every launch.
 6. It creates the Start menu shortcut and an uninstall entry under `HKCU` that runs `pastegrab.exe --uninstall`. From M4 it also registers the `pastegrab:` protocol.
 7. It runs a self-test: each tool's `--version`, a one-second ffmpeg encode of a test pattern, a QuickJS one-liner. The results and the machine profile go into a Russian report on the last screen.
@@ -505,7 +505,8 @@ The installer settles the machine check, the tuned defaults, the prerequisites, 
 - Networking is passt in user mode, which needs no bridge, no firewall rule and no root on the host.
 - `autounattend.xml` installs Russian Windows with a local `tester` account and automatic logon, and `firstlogon.ps1` adds the remaining drivers, the QEMU guest agent and no-sleep power settings. Tests drive the VM through `virsh qemu-agent-command`.
 - A snapshot named `clean` after setup lets every run start from the same state.
-- KB2999226 from the Microsoft Update Catalog then goes in, and a second snapshot, `ucrt`, mirrors his PC. `clean` keeps testing setup's app-local UCRT path.
+- The UCRT then goes in, and a second snapshot, `ucrt`, mirrors his PC. The Microsoft Update Catalog no longer lists KB2999226 for Windows 8.x, so 8.1 gets its successor KB3118401, and 8.0, which has neither, gets the UCRT from Microsoft's current VC++ redistributable. `clean` keeps testing setup's app-local UCRT path.
+- The install ISOs are deleted after setup, with the install drive emptied in each snapshot's definition. Rebuilding a VM needs its ISO back, identified by the SHA-1 above.
 - Once per release both VMs boot with QEMU's `Penryn` CPU model instead of host-passthrough. It has no SSE4.2 or AVX, and any binary built for a newer CPU dies there with an illegal instruction before it can do so on his PC.
 
 ## 12. Budgets
