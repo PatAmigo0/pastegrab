@@ -201,6 +201,25 @@ impl ProfileKind {
     }
 }
 
+// A new profile breaks this match until it gets the next number here and its place in `ALL`.
+const _: () = {
+    const fn position(kind: ProfileKind) -> usize {
+        match kind {
+            ProfileKind::Video => 0,
+            ProfileKind::BestQuality => 1,
+            ProfileKind::Small => 2,
+            ProfileKind::Audio => 3,
+            ProfileKind::AudioMp3 => 4,
+            ProfileKind::Analysis => 5,
+        }
+    }
+    let mut i = 0;
+    while i < ProfileKind::ALL.len() {
+        assert!(position(ProfileKind::ALL[i]) == i);
+        i += 1;
+    }
+};
+
 const fn video(codec: Option<VideoCodec>, cap: HeightCap, rank: Rank) -> VideoGoal {
     VideoGoal {
         codec,
