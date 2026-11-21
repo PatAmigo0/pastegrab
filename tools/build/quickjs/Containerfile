@@ -1,0 +1,7 @@
+FROM docker.io/library/debian:trixie-slim@sha256:7378260c0a098d27ac206225db5e7d92b8c7c84ea7afccc86eeb513756bbd392
+
+# Debian's default mingw-w64 links msvcrt.dll, which every Windows 8 has without the UCRT.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      binutils-mingw-w64-x86-64 cmake gcc gcc-mingw-w64-x86-64 libc6-dev make xz-utils \
+ && rm -rf /var/lib/apt/lists/*
