@@ -468,7 +468,7 @@ Everything is per-user, and nothing needs admin rights. A `portable.txt` beside 
 2. pastegrab encrypts the text in age's file format to your X25519 public key, built from `ring`'s X25519, HKDF and ChaCha20-Poly1305, and calls Telegram's `sendDocument` over HTTPS with `report.age` and a caption that names only the app version and the failure kind. At most 5 reports an hour leave one PC.
 3. If Telegram can't be reached, pastegrab saves the plain report next to its logs and copies it to the clipboard.
 
-`age -d -i <identity>` opens a report, with the identity kept in your password manager. The public key is no secret and lives in the repository. The token and your chat ID come from the password manager at build time, into environment variables that `option_env!` reads, and never land in git. A build without them keeps step 3 only. Inside the exe the token is XOR-masked, which keeps it out of `strings` and stops nobody who tries harder. Whoever extracts it can post into your chat, rename the bot, and with your chat ID forward old messages and fetch their files, which is why the bodies are ciphertext. In that case `/revoke` in BotFather kills the token, and the next release carries a new one through self-update. Until he installs it, reports fall back to step 3.
+`age -d -i <identity>` opens a report, with the identity kept in your password manager. The public key is no secret and lives in the repository. The token and your chat ID sit in `secrets.toml` at the repository root, which git ignores. You paste them in, and CI writes it from repository secrets. `crates/secrets` reads it at build time, refuses a malformed token or chat ID, and compiles the token XOR-masked with the high bit set in every byte. That keeps it out of `strings` and stops nobody who tries harder. A build without the file keeps step 3 only. Whoever extracts it can post into your chat, rename the bot, and with your chat ID forward old messages and fetch their files, which is why the bodies are ciphertext. In that case `/revoke` in BotFather kills the token, and the next release carries a new one through self-update. Until he installs it, reports fall back to step 3.
 
 ## 10. Build and release
 
@@ -555,6 +555,24 @@ Work the design avoids:
 - sidecar processes alive while idle;
 - more than one CPU-heavy job at a time, or one at normal priority.
 
+### Profiling
+
+**Every optimization lands with a before and after number from these, measured on an idle machine on its performance power profile.**
+
+- `cargo bench -p pastegrab-domain` times link analysis, planning and naming with `divan`; the progress-line parser joins when the yt-dlp adapter exists.
+- A test with a counting global allocator fails when a progress line allocates after the first.
+- `just size` builds the Windows binaries in the toolchain container and prints their sizes, with a per-crate breakdown of the app.
+- The lab measures start time and private memory on both VMs, warm and with a cold file cache on an HDD-speed disk.
+- Compiler options compete on those numbers: `opt-level` 3, `"s"` and `"z"`, `-Zlocation-detail=none`, `-Zfmt-debug=shallow` and `-Zbuild-std-features=optimize_for_size`. Each binary keeps what wins for it; the launcher and setup lean towards size.
+
+### Per-CPU builds
+
+**QuickJS gets one build per CPU level, and nothing else does, because only QuickJS spends seconds of CPU per video in code compiled without runtime dispatch.**
+
+- The variants are x86-64, x86-64-v2 and x86-64-v3, each at `-O3` with LTO and with PGO trained on captured YouTube challenge scripts. The release manifest lists them by level, and setup picks one from CPUID, which it already reads for the machine profile.
+- pastegrab's own binaries stay baseline x86-64. A UI that waits on pipes gains nothing measurable from AVX2.
+- ffmpeg and x264 choose their SIMD code at runtime, and python-build-standalone's Windows build is already PGO-optimized.
+
 ## 13. Milestones
 
 ### M0 platform check
@@ -605,7 +623,7 @@ URL protocol and bookmarklet, drag from the browser, live recording, GIF export,
 His hardware stays unknown by design, and setup's report answers it once he installs pastegrab. Two things need you:
 
 1. olympics.com from a home connection, with the release the lab used: `yt-dlp_linux --ignore-config --impersonate chrome --simulate --print title "<link>"`, where `yt-dlp_linux` is the 2026.10.26 file from yt-dlp's release page. A printed title means his home connection most likely works too. A 403 means his main source needs another route.
-2. Before M2, a bot from BotFather, your chat ID with it, and an age identity from `age-keygen`, all three in your password manager. The identity's public line goes into the repository.
+2. Before M2, a bot from BotFather and your chat ID with it, pasted into `secrets.toml`. Also an age identity from `age-keygen` in your password manager, whose public line goes into the repository.
 
 ## Sources
 
