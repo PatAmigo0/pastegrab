@@ -126,11 +126,8 @@ const SITES: &[SiteRule] = &[
     SiteRule {
         site: Site::ArchiveOrg,
         hosts: &["archive.org"],
-        routes: &[
-            path("/details/{id}", Single),
-            path("/details/{id}/{}", Single),
-            path("/embed/{id}", Single),
-        ],
+        // An item page, or one file of it; the file is part of the id.
+        routes: &[path("/details/{id+}", Single), path("/embed/{id+}", Single)],
         keep: &[],
         intent: Intent::Video,
         canonical: host("archive.org"),

@@ -149,13 +149,22 @@ pub struct Link {
     pub playlist: Option<PlaylistHint>,
 }
 
+/// What makes two links the same download.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum DedupKey {
+    /// An item on a known site, however its link was written.
+    Item(Site, LinkKind, String),
+    /// Anything else, by its cleaned URL.
+    Url(String),
+}
+
 impl Link {
     /// Two links with the same key are the same download.
     #[must_use]
-    pub fn dedup_key(&self) -> String {
+    pub fn dedup_key(&self) -> DedupKey {
         match (self.site, &self.id) {
-            (Some(site), Some(id)) => format!("{}:{:?}:{id}", site.name(), self.kind),
-            _ => self.url.as_str().to_owned(),
+            (Some(site), Some(id)) => DedupKey::Item(site, self.kind, id.clone()),
+            _ => DedupKey::Url(self.url.as_str().to_owned()),
         }
     }
 
@@ -174,19 +183,24 @@ impl Link {
 
 /// Classifies one URL, cleans its query and rewrites it to the site's canonical form.
 pub(super) fn classify(mut url: Url) -> Link {
-    if let Some((kind, intent)) = by_extension(url.path()) {
+    let rule = url.host_str().and_then(sites::rule_for);
+    let route = rule.and_then(|rule| {
+        rule.routes
+            .iter()
+            .find_map(|route| route.id_in(&url).map(|id| (route.kind, Some(id))))
+    });
+    // A site's own page wins over a file name in its path; any other path naming a file is that file.
+    if route.is_none()
+        && let Some((kind, intent)) = by_extension(url.path())
+    {
         clean::drop_trackers(&mut url);
         return Link::unknown(url, kind, intent);
     }
-    let Some(rule) = url.host_str().and_then(sites::rule_for) else {
+    let Some(rule) = rule else {
         clean::drop_trackers(&mut url);
         return Link::unknown(url, LinkKind::Page, Intent::Video);
     };
-    let (kind, id) = rule
-        .routes
-        .iter()
-        .find_map(|route| route.id_in(&url).map(|id| (route.kind, Some(id))))
-        .unwrap_or((LinkKind::Page, None));
+    let (kind, id) = route.unwrap_or((LinkKind::Page, None));
     let youtube_single = rule.site == Site::YouTube && kind == LinkKind::Single;
     let start = youtube_single
         .then(|| query_value(&url, "t"))
@@ -209,7 +223,7 @@ pub(super) fn classify(mut url: Url) -> Link {
     }
 }
 
-/// Media files and manifests are known by their extension, before any site rule.
+/// Media files and manifests are known by their extension, unless a site route claims the URL.
 fn by_extension(path: &str) -> Option<(LinkKind, Intent)> {
     let name = path.rsplit('/').next()?;
     let (_, ext) = name.rsplit_once('.')?;

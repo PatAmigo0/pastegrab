@@ -202,6 +202,35 @@ fn direct_files_and_manifests() {
 }
 
 #[test]
+fn an_archive_org_file_page_is_the_site_not_a_direct_file() {
+    let page =
+        "https://archive.org/details/Election_Ads/Commercial-Nixon1960ElectionAdToughonDefense.mpg";
+    check(
+        page,
+        page,
+        Some(Site::ArchiveOrg),
+        LinkKind::Single,
+        Some("Election_Ads/Commercial-Nixon1960ElectionAdToughonDefense.mpg"),
+    );
+    check(
+        "https://archive.org/download/Election_Ads/Commercial-Nixon1960ElectionAdToughonDefense.mpg",
+        "https://archive.org/download/Election_Ads/Commercial-Nixon1960ElectionAdToughonDefense.mpg",
+        None,
+        LinkKind::DirectMedia,
+        None,
+    );
+}
+
+#[test]
+fn two_files_of_one_archive_org_item_are_two_downloads() {
+    let links = analyze(
+        "https://archive.org/details/Cops1922/a.mp4 https://archive.org/details/Cops1922/b.mp4 \
+         https://archive.org/details/Cops1922",
+    );
+    assert_eq!(links.len(), 3, "{links:#?}");
+}
+
+#[test]
 fn unknown_page_loses_trackers_only() {
     check(
         "https://example.org/news/some-article?utm_source=tg&id=5&ysclid=abc",

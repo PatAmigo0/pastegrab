@@ -14,7 +14,7 @@ mod unwrap;
 
 use std::collections::HashSet;
 
-pub use classify::{CleanUrl, Intent, Link, LinkKind, ManifestKind, PlaylistHint, Site};
+pub use classify::{CleanUrl, DedupKey, Intent, Link, LinkKind, ManifestKind, PlaylistHint, Site};
 
 /// Every link in `text`, cleaned and classified, in order of appearance and without duplicates.
 #[must_use]

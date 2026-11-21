@@ -8,6 +8,7 @@ use super::classify::LinkKind;
 pub(super) struct Route {
     /// Segments are literal, `{}` matches any one segment, and `{id}` captures the id, or `{n}` if
     /// it must be digits. A literal prefix may precede the capture, as in `@{id}` or `video{id}`.
+    /// A final `{id+}` captures the rest of the path, one segment or more.
     pub path: &'static str,
     /// Takes the id from this query parameter instead of the path.
     pub query_id: Option<&'static str>,
@@ -42,14 +43,31 @@ enum PathMatch<'p> {
 
 fn match_path<'p>(template: &str, path: &'p str) -> PathMatch<'p> {
     let mut id = None;
-    let mut want = template.trim_end_matches('/').split('/');
-    let mut have = path.trim_end_matches('/').split('/');
-    loop {
-        match (want.next(), have.next()) {
-            (None, None) => return PathMatch::Hit(id),
-            (Some(template), Some(segment)) if segment_matches(template, segment, &mut id) => {}
-            _ => return PathMatch::Miss,
+    let mut rest = Some(path.trim_end_matches('/'));
+    for want in template.trim_end_matches('/').split('/') {
+        let Some(have) = rest else {
+            return PathMatch::Miss;
+        };
+        if want == "{id+}" {
+            return if have.is_empty() {
+                PathMatch::Miss
+            } else {
+                PathMatch::Hit(Some(have))
+            };
         }
+        let (segment, next) = match have.split_once('/') {
+            Some((segment, next)) => (segment, Some(next)),
+            None => (have, None),
+        };
+        if !segment_matches(want, segment, &mut id) {
+            return PathMatch::Miss;
+        }
+        rest = next;
+    }
+    if rest.is_none() {
+        PathMatch::Hit(id)
+    } else {
+        PathMatch::Miss
     }
 }
 
@@ -107,5 +125,19 @@ mod tests {
             PathMatch::Hit(Some("123"))
         );
         assert_eq!(match_path("/{n}", "/about"), PathMatch::Miss);
+    }
+
+    #[test]
+    fn rest_capture_takes_every_remaining_segment() {
+        assert_eq!(
+            match_path("/details/{id+}", "/details/item/file.mpg"),
+            PathMatch::Hit(Some("item/file.mpg"))
+        );
+        assert_eq!(
+            match_path("/details/{id+}", "/details/item/"),
+            PathMatch::Hit(Some("item"))
+        );
+        assert_eq!(match_path("/details/{id+}", "/details"), PathMatch::Miss);
+        assert_eq!(match_path("/details/{id+}", "/details/"), PathMatch::Miss);
     }
 }
