@@ -305,6 +305,58 @@ fn a_sound_only_source_has_no_video_plan() {
     assert_eq!(ids(&plan(&info, ProfileKind::Audio, 768)), ["mp3"]);
 }
 
+fn source(formats: Vec<Format>) -> MediaInfo {
+    MediaInfo {
+        title: "clip".into(),
+        duration: Some(60),
+        is_live: false,
+        formats,
+    }
+}
+
+#[test]
+fn without_audio_only_formats_a_muxed_one_keeps_the_sound() {
+    let info = source(vec![
+        video("dash-720", "avc1.64001f", 720, 30, 20),
+        muxed("hls-360", 360, 30, 96, 800),
+    ]);
+    assert_eq!(ids(&plan(&info, ProfileKind::Video, 768)), ["hls-360"]);
+}
+
+#[test]
+fn a_silent_source_stays_a_silent_video() {
+    let info = source(vec![video("v-480", "avc1.4d401e", 480, 25, 8)]);
+    assert_eq!(ids(&plan(&info, ProfileKind::Video, 768)), ["v-480"]);
+}
+
+#[test]
+fn hls_variants_without_codecs_still_plan() {
+    let variant = |id: &str, height: u32, kbps: u32| Format {
+        id: id.into(),
+        video: Some(VideoStream {
+            codec: VideoCodec::Unknown,
+            height: Some(height),
+            fps: None,
+        }),
+        audio: Some(AudioStream {
+            codec: AudioCodec::Unknown,
+            bitrate: None,
+        }),
+        size: None,
+        bitrate: Some(kbps),
+        protocol: Protocol::Hls,
+        drm: false,
+    };
+    let info = source(vec![
+        variant("hls-360", 360, 800),
+        variant("hls-720", 720, 2500),
+        variant("hls-1080", 1080, 5000),
+    ]);
+    let fetch = plan(&info, ProfileKind::Video, 768);
+    assert_eq!(ids(&fetch), ["hls-720"]);
+    assert_eq!(fetch.merge_into, None);
+}
+
 #[test]
 fn a_section_must_end_after_it_starts() {
     let at = Duration::from_secs;

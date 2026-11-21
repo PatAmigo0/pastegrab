@@ -183,14 +183,18 @@ pub fn plan_fetch(
         Some(goal) => {
             let cap = height_cap(goal.cap, machine);
             let video = pick_video(&usable, goal, cap, duration).ok_or(PlanError::NoVideo)?;
-            let separate_audio = video
-                .audio
-                .is_none()
-                .then(|| pick_audio(&usable, profile.audio, duration, false))
-                .flatten();
-            match separate_audio {
-                Some(audio) => vec![video, audio],
-                None => vec![video],
+            if video.audio.is_some() {
+                vec![video]
+            } else if let Some(audio) = pick_audio(&usable, profile.audio, duration, false) {
+                vec![video, audio]
+            } else {
+                // Without an audio-only format a muxed one keeps the sound; a silent source stays silent.
+                let muxed: Vec<&Format> = usable
+                    .iter()
+                    .copied()
+                    .filter(|f| f.audio.is_some())
+                    .collect();
+                vec![pick_video(&muxed, goal, cap, duration).unwrap_or(video)]
             }
         }
         None => vec![pick_audio(&usable, profile.audio, duration, true).ok_or(PlanError::NoAudio)?],

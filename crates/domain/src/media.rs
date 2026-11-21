@@ -19,6 +19,9 @@ pub enum VideoCodec {
     Mpeg2,
     /// Anything else.
     Other,
+    /// A stream the source lists without naming its codec, as HLS variants without a CODECS
+    /// attribute do; ffprobe names it after the fetch.
+    Unknown,
 }
 
 impl VideoCodec {
@@ -52,7 +55,7 @@ impl VideoCodec {
             Self::H264 | Self::Mpeg4 | Self::Mpeg2 | Self::Vp8 => 3,
             Self::Vp9 | Self::Hevc => 2,
             Self::Av1 => 1,
-            Self::Other => 0,
+            Self::Other | Self::Unknown => 0,
         }
     }
 }
@@ -78,6 +81,8 @@ pub enum AudioCodec {
     Flac,
     /// Anything else.
     Other,
+    /// A stream the source lists without naming its codec; ffprobe names it after the fetch.
+    Unknown,
 }
 
 impl AudioCodec {
