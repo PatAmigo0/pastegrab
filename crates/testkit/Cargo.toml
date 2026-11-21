@@ -1,0 +1,15 @@
+[package]
+name = "pastegrab-testkit"
+version = "0.1.0"
+description = "Fakes for every port, for tests of the queue, the steps and the views"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+pastegrab-app = { path = "../app" }
+pastegrab-domain = { path = "../domain" }
+
+[lints]
+workspace = true

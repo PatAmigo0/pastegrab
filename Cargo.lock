@@ -393,6 +393,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
+name = "pastegrab-app"
+version = "0.1.0"
+dependencies = [
+ "pastegrab-domain",
+ "pastegrab-testkit",
+]
+
+[[package]]
 name = "pastegrab-domain"
 version = "0.1.0"
 dependencies = [
@@ -408,6 +416,14 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "toml",
+]
+
+[[package]]
+name = "pastegrab-testkit"
+version = "0.1.0"
+dependencies = [
+ "pastegrab-app",
+ "pastegrab-domain",
 ]
 
 [[package]]

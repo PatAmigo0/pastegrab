@@ -1,0 +1,17 @@
+[package]
+name = "pastegrab-app"
+version = "0.1.0"
+description = "Ports, the job core and the runtime that carries out its decisions"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+pastegrab-domain = { path = "../domain" }
+
+[dev-dependencies]
+pastegrab-testkit = { path = "../testkit" }
+
+[lints]
+workspace = true

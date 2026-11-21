@@ -1,0 +1,18 @@
+allow-expect-in-tests = true
+allow-unwrap-in-tests = true
+doc-valid-idents = ["..", "YouTube", "TikTok", "SoundCloud", "PySide"]
+
+# app decides; adapters touch the world.
+disallowed-types = [
+    { path = "std::fs::File", reason = "file access belongs to an adapter behind the Files port" },
+    { path = "std::process::Command", reason = "processes start through the ProcessRunner port" },
+    { path = "std::net::TcpStream", reason = "network access belongs to an adapter" },
+    { path = "std::time::SystemTime", reason = "time comes through a port" },
+]
+disallowed-methods = [
+    { path = "std::fs::read", reason = "file access belongs to an adapter" },
+    { path = "std::fs::read_to_string", reason = "file access belongs to an adapter" },
+    { path = "std::fs::write", reason = "file access belongs to an adapter" },
+    { path = "std::fs::rename", reason = "renames go through the Files port" },
+    { path = "std::fs::remove_dir_all", reason = "removals go through the Files port" },
+]
