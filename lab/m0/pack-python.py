@@ -95,6 +95,10 @@ def main() -> None:
     with zipfile.ZipFile(py / "site.zip", "w", zipfile.ZIP_DEFLATED) as z:
         for top in sorted(wheels.iterdir()):
             if top.name.endswith(".dist-info"):
+                # importlib.metadata reads versions from here; curl_cffi won't import without it.
+                (site / top.name).mkdir()
+                shutil.copyfile(top / "METADATA", site / top.name / "METADATA")
+                loose += 1
                 continue
             binary = top.is_dir() and any(p.suffix in {".pyd", ".dll"} for p in top.rglob("*"))
             binary = binary or top.suffix == ".pyd" or top.name.endswith(".libs")
