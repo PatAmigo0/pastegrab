@@ -28,6 +28,15 @@ pbs=cpython-3.11.18+20261110-x86_64-pc-windows-msvc-install_only_stripped.tar.gz
 gh_rel astral-sh/python-build-standalone 20261110 pbs-3.11.18 "$pbs" SHA256SUMS
 (cd "$dl/pbs-3.11.18" && grep -F " $pbs" SHA256SUMS | sha256sum -c)
 
+echo "== the same Python for Linux, which compiles the Windows build's bytecode"
+pbsl=cpython-3.11.18+20261110-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz
+gh_rel astral-sh/python-build-standalone 20261110 pbs-3.11.18-linux "$pbsl"
+(cd "$dl/pbs-3.11.18" && grep -F " $pbsl" SHA256SUMS | sed "s#  #  ../pbs-3.11.18-linux/#" | sha256sum -c)
+[ -x "${M0_DIR:-/mnt/storage/pastegrab-m0}/pylinux/python/bin/python3.11" ] || {
+    mkdir -p "${M0_DIR:-/mnt/storage/pastegrab-m0}/pylinux"
+    tar -xzf "$dl/pbs-3.11.18-linux/$pbsl" -C "${M0_DIR:-/mnt/storage/pastegrab-m0}/pylinux"
+}
+
 echo "== python.org 3.11.9 embeddable"
 mkdir -p "$dl/python-3.11.9"
 embed=$dl/python-3.11.9/python-3.11.9-embed-amd64.zip

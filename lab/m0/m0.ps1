@@ -212,6 +212,7 @@ function Pkg([string]$k, [string]$base = $root) {
         'p3' { @{ exe = "$base\p3\python\python.exe"; flags = @('-I'); script = @("$base\p3\yt-dlp") } }
         'p2c' { @{ exe = "$base\p2\python\python.exe"; flags = @('-I'); script = @("$base\p2\ytdlp") } }
         'p3c' { @{ exe = "$base\p3\python\python.exe"; flags = @('-I'); script = @("$base\p3\ytdlp") } }
+        'p4' { @{ exe = "$base\p4\python\python.exe"; flags = @('-I'); script = @('-m', 'yt_dlp') } }
     }
 }
 function Y($p, [string[]]$a, [string[]]$extra = @()) {
@@ -234,7 +235,8 @@ try {
             $cd = (Get-WmiObject Win32_LogicalDisk -Filter "VolumeName='PGM0'").DeviceID
             if (-not $cd) { throw 'the PGM0 disc is not inserted' }
             Add-Type -AssemblyName System.IO.Compression.FileSystem
-            foreach ($z in 'p1', 'p2', 'p3') {
+            foreach ($z in 'p1', 'p2', 'p3', 'p4') {
+                if (-not (Test-Path "$cd\$z.zip")) { continue }
                 $dst = Join-Path $root $z
                 if (Test-Path $dst) { Remove-Item -Recurse -Force $dst }
                 [IO.Compression.ZipFile]::ExtractToDirectory("$cd\$z.zip", $dst)

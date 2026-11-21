@@ -36,6 +36,11 @@ cp -r "$work/deps/." "$work/p3/python/Lib/site-packages/"
 cp "$dl/ytdlp-20261026/yt-dlp" "$work/p3/yt-dlp"
 (cd "$work/p3" && bsdtar -a -cf "$st/p3.zip" python yt-dlp)
 
+# p4: the same Python with its library, the wheels and yt-dlp as bytecode in a few zip files.
+"$base/pylinux/python/bin/python3.11" -I "$here/pack-python.py" "$work/p3/python" "$work/deps" \
+    "$dl/ytdlp-20261026/yt-dlp" "$work/p4" >/dev/null
+(cd "$work/p4" && bsdtar -a -cf "$st/p4.zip" python)
+
 mkdir -p "$st/qjs" "$st/qjs-ng" "$st/ffmpeg"
 cp "$base/qjs/qjs.exe" "$st/qjs/qjs.exe"
 cp "$base/qjs/qjs-ng.exe" "$st/qjs-ng/qjs.exe"
