@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""guest-run VM SCRIPT...: runs a PowerShell script in a lab VM via the QEMU guest agent.
+
+Prints the script's stdout and stderr and exits with its exit code. The script travels as
+-EncodedCommand, which no quoting layer between here and PowerShell can mangle.
+"""
+# needs: virsh
+import base64
+import json
+import subprocess
+import sys
+import time
+
+TIMEOUT_S = 600
+
+# Without a console, setting the output encoding can throw; output then stays in code page 866.
+PRELUDE = (
+    "try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}\n"
+    "$ProgressPreference = 'SilentlyContinue'\n"
+)
+EPILOGUE = "\nif ($LASTEXITCODE) { exit $LASTEXITCODE }\n"
+
+
+def agent(vm: str, payload: dict) -> dict:
+    out = subprocess.run(
+        ["virsh", "-c", "qemu:///system", "qemu-agent-command", vm, json.dumps(payload)],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    return json.loads(out)["return"]
+
+
+def decode(data: str) -> str:
+    raw = base64.b64decode(data)
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("cp866")
+
+
+def main() -> int:
+    if len(sys.argv) < 3:
+        sys.exit("usage: guest-run VM SCRIPT...")
+    vm, script = sys.argv[1], " ".join(sys.argv[2:])
+    encoded = base64.b64encode((PRELUDE + script + EPILOGUE).encode("utf-16-le")).decode()
+    started = agent(
+        vm,
+        {
+            "execute": "guest-exec",
+            "arguments": {
+                "path": "powershell.exe",
+                "arg": ["-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
+                "capture-output": True,
+            },
+        },
+    )
+    deadline = time.monotonic() + TIMEOUT_S
+    while True:
+        status = agent(vm, {"execute": "guest-exec-status", "arguments": {"pid": started["pid"]}})
+        if status.get("exited"):
+            break
+        if time.monotonic() > deadline:
+            sys.exit(f"guest-run: still running after {TIMEOUT_S} s")
+        time.sleep(0.5)
+    sys.stdout.write(decode(status.get("out-data", "")))
+    sys.stderr.write(decode(status.get("err-data", "")))
+    return status.get("exitcode", 1)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
