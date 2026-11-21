@@ -5,5 +5,6 @@
 
 pub mod link;
 pub mod media;
+pub mod name;
 pub mod plan;
 pub mod profile;
