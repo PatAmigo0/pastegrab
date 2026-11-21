@@ -9,7 +9,7 @@ use std::cmp::Reverse;
 use std::fmt;
 use std::time::Duration;
 
-use crate::media::{AudioCodec, AudioStream, FileProbe, Format, MediaInfo, ProbedVideo};
+use crate::media::{AudioCodec, AudioStream, FileProbe, Format, FormatId, MediaInfo, ProbedVideo};
 use crate::media::{VideoCodec, VideoStream};
 use crate::profile::{AudioGoal, Container, HeightCap, Profile, Rank, VideoGoal};
 
@@ -66,7 +66,7 @@ pub struct Trim {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FetchPlan {
     /// Exact format ids; yt-dlp gets them joined with `+`.
-    pub format_ids: Vec<String>,
+    pub format_ids: Vec<FormatId>,
     /// The container yt-dlp merges a separate video and audio into.
     pub merge_into: Option<Container>,
     /// The part to download, when only part of the source is wanted.
@@ -81,7 +81,8 @@ impl FetchPlan {
     /// The value for yt-dlp's `-f`, such as `137+140`.
     #[must_use]
     pub fn selector(&self) -> String {
-        self.format_ids.join("+")
+        let ids: Vec<&str> = self.format_ids.iter().map(FormatId::as_str).collect();
+        ids.join("+")
     }
 }
 
@@ -206,7 +207,10 @@ pub fn plan_fetch(
         })
         .map(|bytes| share_of(bytes, duration, section));
     Ok(FetchPlan {
-        format_ids: picked.iter().map(|f| f.id.clone()).collect(),
+        format_ids: picked
+            .iter()
+            .filter_map(|f| FormatId::parse(&f.id))
+            .collect(),
         merge_into: merge_container(&picked, profile.container),
         section,
         expected_bytes,

@@ -6,7 +6,7 @@
 use std::time::Duration;
 
 use pastegrab_domain::media::{
-    AudioCodec, AudioStream, Family, FileProbe, Format, MediaInfo, ProbedVideo, Protocol,
+    AudioCodec, AudioStream, Family, FileProbe, Format, FormatId, MediaInfo, ProbedVideo, Protocol,
     VideoCodec, VideoStream,
 };
 use pastegrab_domain::plan::{
@@ -158,7 +158,7 @@ fn plan(info: &MediaInfo, kind: ProfileKind, screen_height: u32) -> FetchPlan {
 }
 
 fn ids(plan: &FetchPlan) -> Vec<&str> {
-    plan.format_ids.iter().map(String::as_str).collect()
+    plan.format_ids.iter().map(FormatId::as_str).collect()
 }
 
 #[test]
@@ -500,4 +500,19 @@ fn a_best_quality_fragment_encodes_h264_rather_than_av1() {
     let plan = convert(&file, ProfileKind::BestQuality, Some(HALF_MINUTE)).unwrap();
     assert_eq!(plan.video, h264(false, false));
     assert_eq!(plan.audio, AudioAction::Copy);
+}
+
+#[test]
+fn format_ids_that_select_something_else_are_unusable() {
+    for id in ["all", "best", "BV", "mergeall", "137+140", "a b", "x/y", ""] {
+        assert_eq!(FormatId::parse(id), None, "{id:?}");
+    }
+    for id in ["137", "hls-720p", "dash-video=1000000", "mp4", "0"] {
+        assert!(FormatId::parse(id).is_some(), "{id:?}");
+    }
+    let info = source(vec![
+        muxed("all", 1080, 30, 128, 6000),
+        muxed("hls-360", 360, 30, 96, 800),
+    ]);
+    assert_eq!(ids(&plan(&info, ProfileKind::Video, 1080)), ["hls-360"]);
 }

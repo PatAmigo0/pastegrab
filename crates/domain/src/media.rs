@@ -147,6 +147,49 @@ pub struct AudioStream {
     pub bitrate: Option<u32>,
 }
 
+/// Words yt-dlp's `-f` reads as a choice of its own. A site could name a format `all` and turn
+/// one download into every format the page has.
+const SELECTOR_WORDS: [&str; 16] = [
+    "all",
+    "mergeall",
+    "best",
+    "worst",
+    "b",
+    "w",
+    "bestvideo",
+    "worstvideo",
+    "bv",
+    "wv",
+    "bestaudio",
+    "worstaudio",
+    "ba",
+    "wa",
+    "bestvideo*",
+    "bv*",
+];
+
+/// A format id that `-f` can only read as that format: letters, digits, `.`, `_`, `-` and `=`,
+/// and none of yt-dlp's selector words. Extension words such as `mp4` stay allowed; as a
+/// selector they mean the best format with that extension, which is what the planner picked.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FormatId(String);
+
+impl FormatId {
+    /// The id, when it is safe to pass to `-f`.
+    #[must_use]
+    pub fn parse(id: &str) -> Option<Self> {
+        let allowed = |c: char| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '=');
+        let selector = SELECTOR_WORDS.iter().any(|w| w.eq_ignore_ascii_case(id));
+        (!id.is_empty() && id.chars().all(allowed) && !selector).then(|| Self(id.to_owned()))
+    }
+
+    /// The id as yt-dlp knows it.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 /// One entry in yt-dlp's format list.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Format {
@@ -167,12 +210,14 @@ pub struct Format {
 }
 
 impl Format {
-    /// A usable format is DRM-free, fetchable and carries video or sound.
+    /// A usable format is DRM-free, fetchable, carries video or sound, and has an id that
+    /// `-f` reads as that format and nothing else.
     #[must_use]
     pub fn is_usable(&self) -> bool {
         !self.drm
             && self.protocol != Protocol::Unsupported
             && (self.video.is_some() || self.audio.is_some())
+            && FormatId::parse(&self.id).is_some()
     }
 
     /// Bytes on the wire: the reported size, or the bitrate times the duration.
