@@ -80,13 +80,13 @@ Compiling wins every warm start and loses every cold one. A thousand loose `.pyc
 | PGO, LTO, x86-64 | 4.68, 4.72, 4.78 s |
 | PGO, LTO, x86-64-v3 | 4.76, 4.79, 5.22 s |
 
-A first pass with hyperfine ran each build's five runs back to back and showed LTO and PGO two to three times faster. In that pass `-O2` took 17 s, against 4.9 s interleaved, so the host's changing load moved the numbers more than any flag did. Interleaving spreads that load across all builds alike.
+A first pass with hyperfine ran each build's five runs back to back and showed LTO and PGO two to three times faster. In that pass `-O2` took 17 s, against 4.9 s interleaved. The host's changing load moved the numbers more than any flag did. Interleaving spreads that load across all builds alike.
 
-yt-dlp also keeps no solved challenge between runs: two probes of one video with a shared cache folder both handed QuickJS the full 3.3 MB script.
+yt-dlp also keeps no solved challenge between runs. Two probes of one video with a shared cache folder both handed QuickJS the full 3.3 MB script.
 
 ## Core benchmarks
 
-`cargo bench -p pastegrab-domain` on the host, loaded with other work and on its power-saving profile, so the numbers say only how far each sits from its budget:
+`cargo bench -p pastegrab-domain` ran on the host while it was loaded with other work and on its power-saving profile. The numbers say only how far each sits from its budget.
 
 | Bench | Median |
 |---|---|
@@ -109,6 +109,6 @@ QuickJS reads its script path in the ANSI code page. A path that cp1251 can't re
 
 ## Not covered
 
-- Vimeo needs a login for every test video in yt-dlp's extractor, so archive.org took its place.
+- Vimeo needs a login for every test video in yt-dlp's extractor. archive.org took its place.
 - The import check ran as a load test inside the VMs, not yet as `cargo xtask imports` against export lists.
 - QEMU's `Penryn` CPU model, the stand-in for a CPU without SSE4.2.
