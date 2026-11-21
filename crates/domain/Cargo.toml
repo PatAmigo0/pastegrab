@@ -1,0 +1,17 @@
+[package]
+name = "pastegrab-domain"
+version = "0.1.0"
+description = "Pure core of pastegrab: link understanding, format planning, job states"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+linkify.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

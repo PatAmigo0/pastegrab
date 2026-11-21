@@ -1,0 +1,17 @@
+# The core stays pure: files, processes, sockets and the clock belong to adapters behind ports.
+allow-expect-in-tests = true
+allow-unwrap-in-tests = true
+disallowed-types = [
+    { path = "std::fs::File", reason = "I/O belongs in an adapter" },
+    { path = "std::net::TcpStream", reason = "sockets belong in an adapter" },
+    { path = "std::process::Command", reason = "processes belong in an adapter" },
+    { path = "std::time::Instant", reason = "the clock is a port" },
+    { path = "std::time::SystemTime", reason = "the clock is a port" },
+]
+disallowed-methods = [
+    { path = "std::fs::read", reason = "I/O belongs in an adapter" },
+    { path = "std::fs::read_to_string", reason = "I/O belongs in an adapter" },
+    { path = "std::fs::write", reason = "I/O belongs in an adapter" },
+    { path = "std::thread::sleep", reason = "the core never waits" },
+]
+doc-valid-idents = ["..", "YouTube", "TikTok", "SoundCloud", "PySide"]
