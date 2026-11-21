@@ -52,3 +52,19 @@ Snapshots need the VM shut off. `clean` is Windows right after setup, and `ucrt`
 virsh -c qemu:///system snapshot-create-as pastegrab-w81 clean
 virsh -c qemu:///system snapshot-revert pastegrab-w81 clean
 ```
+
+## M0 harness
+
+**`m0/` reruns the platform checks behind `docs/platform.md`, and a new Python, yt-dlp, QuickJS or ffmpeg version goes through it before it ships.** Downloads, builds and reports live in `$M0_DIR`, `/mnt/storage/pastegrab-m0` by default.
+
+| Script | Does |
+|---|---|
+| `m0/fetch.sh` | downloads each candidate into its own folder and checks its hash |
+| `m0/stage.sh` | assembles the three yt-dlp packages and burns them with `m0.ps1` to the PGM0 disc |
+| `m0/run-all.sh VM [--cold]` | reverts the VM to `ucrt`, inserts the disc, runs every step, writes one report per step |
+| `m0/m0-run VM STEP` | runs one step, such as `smoke`, `youtube p2` or `loadall p3` |
+| `m0/host-control.sh` | the same yt-dlp release from this machine, to tell a Windows 8 failure from a network one |
+
+QuickJS comes first, from `tools/build/quickjs/build.sh "$M0_DIR/qjs"`. `--cold` caps the VM's disk at 80 operations and 80 MB a second, about a 5400 rpm laptop drive, and empties the file cache before each start.
+
+`probe/` is a Rust program that checks the Windows APIs pastegrab relies on, built with `tools/build/rust/build.sh lab/probe x86_64-win7-windows-gnu`. `run-all.sh` copies it into the VM and runs it when the build exists.

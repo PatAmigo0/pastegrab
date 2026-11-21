@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# m0-run VM STEP [PACKAGES]: runs one m0.ps1 step in a lab VM and prints its UTF-8 report.
+# PACKAGES is a comma list such as p2,p3c; the step's own default applies without it.
+# needs: virsh
+set -uo pipefail
+vm=$1 step=$2 pkg=${3:-}
+gr=$(cd "$(dirname "$0")/.." && pwd)/guest-run
+if [ "$step" = setup ]; then
+    ps="\$cd = (Get-WmiObject Win32_LogicalDisk -Filter \"VolumeName='PGM0'\").DeviceID; & \"\$cd\\m0.ps1\" setup"
+else
+    ps="& C:\\pastegrab-lab\\m0\\m0.ps1 $step '$pkg'"
+fi
+out=$(GUEST_RUN_TIMEOUT=1800 "$gr" "$vm" "$ps" 2>&1)
+if grep -q M0BEGIN <<<"$out"; then
+    sed -n '/M0BEGIN/,/M0END/p' <<<"$out" | sed '1d;$d' | tr -d '\r' | base64 -d
+else
+    printf '%s\n' "$out"
+fi
