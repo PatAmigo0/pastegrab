@@ -40,6 +40,12 @@ virsh -c qemu:///system qemu-agent-command pastegrab-w81 '{"execute":"guest-ping
 ./guest-run pastegrab-w81 'Get-Item C:\Windows\System32\ucrtbase.dll | Select-Object -Expand VersionInfo'
 ```
 
+PowerShell starts with the execution policy bypassed, which lets a script call `.ps1` files already in the VM. A script that needs more than 600 seconds sets `GUEST_RUN_TIMEOUT`. `guest-put` copies a file into a running VM in base64 chunks through the same agent.
+
+```sh
+./guest-put pastegrab-w81 m0.ps1 'C:\pastegrab-lab\m0\m0.ps1'
+```
+
 Snapshots need the VM shut off. `clean` is Windows right after setup, and `ucrt` adds the UCRT that his PC has. The install ISOs were deleted after setup, with the install drive emptied in every snapshot, which means a rebuilt VM first needs its ISO back at the old path.
 
 ```sh

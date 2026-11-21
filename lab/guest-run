@@ -7,11 +7,12 @@ Prints the script's stdout and stderr and exits with its exit code. The script t
 # needs: virsh
 import base64
 import json
+import os
 import subprocess
 import sys
 import time
 
-TIMEOUT_S = 600
+TIMEOUT_S = int(os.environ.get("GUEST_RUN_TIMEOUT", "600"))
 
 # Without a console, setting the output encoding can throw; output then stays in code page 866.
 PRELUDE = (
@@ -50,7 +51,14 @@ def main() -> int:
             "execute": "guest-exec",
             "arguments": {
                 "path": "powershell.exe",
-                "arg": ["-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
+                "arg": [
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-EncodedCommand",
+                    encoded,
+                ],
                 "capture-output": True,
             },
         },

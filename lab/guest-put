@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+"""guest-put VM LOCAL REMOTE: copies a local file into a running lab VM through the guest agent."""
+# needs: virsh
+import base64
+import json
+import subprocess
+import sys
+
+CHUNK = 48 * 1024
+
+
+def agent(vm: str, payload: dict):
+    out = subprocess.run(
+        ["virsh", "-c", "qemu:///system", "qemu-agent-command", vm, json.dumps(payload)],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    return json.loads(out)["return"]
+
+
+def main() -> int:
+    if len(sys.argv) != 4:
+        sys.exit("usage: guest-put VM LOCAL REMOTE")
+    vm, local, remote = sys.argv[1:]
+    with open(local, "rb") as f:
+        data = f.read()
+    handle = agent(vm, {"execute": "guest-file-open", "arguments": {"path": remote, "mode": "wb"}})
+    try:
+        for i in range(0, len(data), CHUNK):
+            chunk = base64.b64encode(data[i : i + CHUNK]).decode()
+            agent(vm, {"execute": "guest-file-write", "arguments": {"handle": handle, "buf-b64": chunk}})
+    finally:
+        agent(vm, {"execute": "guest-file-close", "arguments": {"handle": handle}})
+    print(f"{len(data)} bytes to {remote}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
