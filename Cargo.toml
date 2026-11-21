@@ -9,6 +9,7 @@ license = "Apache-2.0"
 publish = false
 
 [workspace.dependencies]
+divan = "0.1.21"
 linkify = "0.12"
 proptest = "1.12"
 url = "2.5"

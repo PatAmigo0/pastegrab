@@ -12,7 +12,12 @@ linkify.workspace = true
 url.workspace = true
 
 [dev-dependencies]
+divan.workspace = true
 proptest.workspace = true
+
+[[bench]]
+name = "domain"
+harness = false
 
 [lints]
 workspace = true
