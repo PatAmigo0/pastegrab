@@ -243,6 +243,10 @@ fn by_extension(path: &str) -> Option<(LinkKind, Intent)> {
 fn canonicalize(url: &mut Url, rule: &SiteRule, kind: LinkKind, id: Option<&str>) {
     // Both calls fail only for non-special schemes or empty hosts, which parsing already ruled out.
     let _ = url.set_scheme("https");
+    // A path no route knows keeps its host: the canonical host may not serve that page.
+    if kind == LinkKind::Page {
+        return;
+    }
     if let Some(host) = rule.canonical.host {
         let _ = url.set_host(Some(host));
     }
