@@ -1,0 +1,102 @@
+<!-- pastegrab test VM: Windows 8.1 Pro VL x64, Russian. passt user-mode networking needs no bridge or firewall rule. -->
+<domain type='kvm'>
+  <name>pastegrab-w81</name>
+  <title>pastegrab lab: Windows 8.1 Pro x64 (ru)</title>
+  <memory unit='GiB'>4</memory>
+  <currentMemory unit='GiB'>4</currentMemory>
+  <vcpu placement='static'>2</vcpu>
+  <cputune>
+    <vcpupin vcpu='0' cpuset='0-7'/>
+    <vcpupin vcpu='1' cpuset='0-7'/>
+  </cputune>
+  <os>
+    <type arch='x86_64' machine='pc-q35-11.0'>hvm</type>
+  </os>
+  <features>
+    <acpi/>
+    <apic/>
+    <!-- No synic/stimer: they are a suspect in Windows guest freezes on 7.x host kernels. -->
+    <hyperv mode='custom'>
+      <relaxed state='on'/>
+      <vapic state='on'/>
+      <spinlocks state='on' retries='8191'/>
+      <vpindex state='on'/>
+      <runtime state='on'/>
+      <reset state='on'/>
+      <frequencies state='on'/>
+      <tlbflush state='on'/>
+      <ipi state='on'/>
+    </hyperv>
+    <vmport state='off'/>
+  </features>
+  <cpu mode='host-passthrough' check='none' migratable='on'>
+    <topology sockets='1' dies='1' clusters='1' cores='2' threads='1'/>
+    <cache mode='passthrough'/>
+  </cpu>
+  <clock offset='localtime'>
+    <timer name='rtc' tickpolicy='catchup'/>
+    <timer name='pit' tickpolicy='delay'/>
+    <timer name='hpet' present='no'/>
+    <timer name='hypervclock' present='yes'/>
+  </clock>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+  <pm>
+    <suspend-to-mem enabled='no'/>
+    <suspend-to-disk enabled='no'/>
+  </pm>
+  <devices>
+    <emulator>/usr/bin/qemu-system-x86_64</emulator>
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2' cache='none' io='native' discard='unmap' detect_zeroes='unmap'/>
+      <source file='/mnt/storage/VM Disks/pastegrab-w81.qcow2'/>
+      <target dev='sda' bus='scsi' rotation_rate='1'/>
+      <boot order='2'/>
+    </disk>
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <source file='/mnt/storage/ISO/ru_windows_8.1_pro_vl_with_update_x64_dvd_6050899.iso'/>
+      <target dev='sdb' bus='sata'/>
+      <readonly/>
+      <boot order='1'/>
+    </disk>
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <source file='/mnt/storage/ISO/virtio-win-0.1.240.iso'/>
+      <target dev='sdc' bus='sata'/>
+      <readonly/>
+    </disk>
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <source file='/mnt/storage/ISO/pastegrab-w81-unattend.iso'/>
+      <target dev='sdd' bus='sata'/>
+      <readonly/>
+    </disk>
+    <controller type='scsi' index='0' model='virtio-scsi'/>
+    <controller type='usb' index='0' model='qemu-xhci' ports='15'/>
+    <controller type='virtio-serial' index='0'/>
+    <interface type='user'>
+      <backend type='passt'/>
+      <model type='virtio'/>
+    </interface>
+    <channel type='unix'>
+      <target type='virtio' name='org.qemu.guest_agent.0'/>
+    </channel>
+    <input type='tablet' bus='usb'/>
+    <input type='mouse' bus='ps2'/>
+    <input type='keyboard' bus='ps2'/>
+    <graphics type='spice' autoport='yes' listen='127.0.0.1'>
+      <listen type='address' address='127.0.0.1'/>
+      <image compression='off'/>
+    </graphics>
+    <audio id='1' type='none'/>
+    <video>
+      <model type='vga' vram='16384' heads='1' primary='yes'/>
+    </video>
+    <memballoon model='virtio'/>
+    <rng model='virtio'>
+      <backend model='random'>/dev/urandom</backend>
+    </rng>
+  </devices>
+</domain>
