@@ -40,7 +40,7 @@ virsh -c qemu:///system qemu-agent-command pastegrab-w81 '{"execute":"guest-ping
 ./guest-run pastegrab-w81 'Get-Item C:\Windows\System32\ucrtbase.dll | Select-Object -Expand VersionInfo'
 ```
 
-Snapshots are taken and restored with the VM shut off. `clean` is Windows right after setup; `ucrt` adds the UCRT, which his PC has. The install ISOs were deleted after setup and every snapshot's install drive is empty, so rebuilding a VM starts with putting its ISO back.
+Snapshots need the VM shut off. `clean` is Windows right after setup, and `ucrt` adds the UCRT that his PC has. The install ISOs were deleted after setup, with the install drive emptied in every snapshot, which means a rebuilt VM first needs its ISO back at the old path.
 
 ```sh
 virsh -c qemu:///system snapshot-create-as pastegrab-w81 clean
