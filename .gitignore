@@ -1,1 +1,3 @@
 target/
+# Build-time secrets; secrets.toml.tmpl shows the format.
+/secrets.toml
