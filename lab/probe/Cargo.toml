@@ -1,0 +1,34 @@
+[package]
+name = "pastegrab-probe"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+description = "Checks the Windows APIs pastegrab relies on, inside the lab VMs"
+
+# A lab tool with its own lockfile, outside the app's workspace.
+[workspace]
+
+[build-dependencies]
+embed-resource = "3.0"
+
+[dependencies]
+ureq = { version = "3.5", default-features = false, features = ["rustls"] }
+windows = { version = "0.62", features = [
+    "Wdk_System_SystemServices",
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+    "Win32_System_LibraryLoader",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+opt-level = 3
+panic = "unwind"
+strip = true
