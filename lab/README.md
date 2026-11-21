@@ -9,12 +9,21 @@ Both run on `qemu:///system`, unactivated, with automatic logon as `tester` / `p
 
 **Networking is passt in user mode.** The guest goes out through the host's own route, and the host needs no bridge, firewall rule or root for it.
 
-Rebuild an unattend ISO from `lab/` after editing its `autounattend.xml` or `common/firstlogon.ps1`:
+Rebuild an unattend ISO from `lab/` after editing its `autounattend.xml` or `common/firstlogon.ps1`. A VM that ran leaves its ISOs owned by libvirt, and the first line deletes the old file before the rebuild.
 
 ```sh
-v=w81; xorriso -as mkisofs -quiet -J -R -V PGUNATTEND -graft-points \
+v=w81; rm -f /mnt/storage/ISO/pastegrab-$v-unattend.iso
+xorriso -as mkisofs -quiet -J -R -V PGUNATTEND -graft-points \
   -o /mnt/storage/ISO/pastegrab-$v-unattend.iso \
   autounattend.xml=win${v#w}-x64/autounattend.xml firstlogon.ps1=common/firstlogon.ps1
+```
+
+The XML files carry no UUID. The first `virsh define` assigns one, and a later redefine has to reuse it, or libvirt refuses the domain as a duplicate.
+
+```sh
+v=w81; d=pastegrab-$v; uuid=$(virsh -c qemu:///system domuuid $d)
+sed "s#<name>$d</name>#<name>$d</name>\n  <uuid>$uuid</uuid>#" win${v#w}-x64/domain.xml > /tmp/$d.xml
+virsh -c qemu:///system define /tmp/$d.xml
 ```
 
 These start a VM, open its screen and ping its guest agent.
@@ -25,7 +34,13 @@ virt-viewer -c qemu:///system pastegrab-w81
 virsh -c qemu:///system qemu-agent-command pastegrab-w81 '{"execute":"guest-ping"}'
 ```
 
-Snapshots are taken and restored with the VM shut off.
+`guest-run` runs a PowerShell script in a running VM through the guest agent and prints its output. The script travels base64-encoded, which keeps the agent's quoting away from it.
+
+```sh
+./guest-run pastegrab-w81 'Get-Item C:\Windows\System32\ucrtbase.dll | Select-Object -Expand VersionInfo'
+```
+
+Snapshots are taken and restored with the VM shut off. `clean` is Windows right after setup; `ucrt` adds the UCRT update, which his PC has.
 
 ```sh
 virsh -c qemu:///system snapshot-create-as pastegrab-w81 clean

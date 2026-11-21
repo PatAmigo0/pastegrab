@@ -34,6 +34,11 @@
         <PathAndCredentials wcm:action="add" wcm:keyValue="18"><Path>E:\viorng\w8\amd64</Path></PathAndCredentials>
         <PathAndCredentials wcm:action="add" wcm:keyValue="19"><Path>F:\viorng\w8\amd64</Path></PathAndCredentials>
         <PathAndCredentials wcm:action="add" wcm:keyValue="20"><Path>G:\viorng\w8\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="21"><Path>C:\vioscsi\w8\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="22"><Path>C:\NetKVM\w8\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="23"><Path>C:\vioserial\w8\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="24"><Path>C:\Balloon\w8\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="25"><Path>C:\viorng\w8\amd64</Path></PathAndCredentials>
       </DriverPaths>
     </component>
     <component name="Microsoft-Windows-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
@@ -55,7 +60,6 @@
               <Active>true</Active>
               <Format>NTFS</Format>
               <Label>Windows</Label>
-              <Letter>C</Letter>
             </ModifyPartition>
           </ModifyPartitions>
         </Disk>

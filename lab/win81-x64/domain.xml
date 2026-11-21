@@ -63,7 +63,7 @@
     </disk>
     <disk type='file' device='cdrom'>
       <driver name='qemu' type='raw'/>
-      <source file='/mnt/storage/ISO/virtio-win-0.1.240.iso'/>
+      <source file='/mnt/storage/ISO/virtio-win-0.1.215.iso'/>
       <target dev='sdc' bus='sata'/>
       <readonly/>
     </disk>
