@@ -1,0 +1,23 @@
+FROM docker.io/library/debian:trixie-slim@sha256:7378260c0a098d27ac206225db5e7d92b8c7c84ea7afccc86eeb513756bbd392
+
+# The GNU win7 targets link with mingw-w64 against msvcrt.dll, which every Windows 8 has.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates curl gcc gcc-mingw-w64-i686 gcc-mingw-w64-x86-64 libc6-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo PATH=/opt/cargo/bin:$PATH \
+    CC_x86_64_win7_windows_gnu=x86_64-w64-mingw32-gcc AR_x86_64_win7_windows_gnu=x86_64-w64-mingw32-ar \
+    CC_i686_win7_windows_gnu=i686-w64-mingw32-gcc AR_i686_win7_windows_gnu=i686-w64-mingw32-ar \
+    CARGO_TARGET_X86_64_WIN7_WINDOWS_GNU_LINKER=x86_64-w64-mingw32-gcc \
+    CARGO_TARGET_I686_WIN7_WINDOWS_GNU_LINKER=i686-w64-mingw32-gcc
+
+ARG RUSTUP_VERSION=1.29.3
+ARG RUSTUP_SHA256=b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55
+ARG TOOLCHAIN=nightly-2026-11-20
+RUN curl -fsSL -o /tmp/rustup-init \
+      https://static.rust-lang.org/rustup/archive/$RUSTUP_VERSION/x86_64-unknown-linux-gnu/rustup-init \
+ && echo "$RUSTUP_SHA256  /tmp/rustup-init" | sha256sum -c - \
+ && chmod +x /tmp/rustup-init \
+ && /tmp/rustup-init -y --no-modify-path --profile minimal --default-toolchain $TOOLCHAIN --component rust-src \
+ && rm /tmp/rustup-init
