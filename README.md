@@ -10,4 +10,6 @@ Early stage. `SPEC.md` holds the design, the decisions and the milestones; the l
 | `crates/domain` | pure core: finds, unwraps, cleans and classifies links |
 | `lab/` | Windows 8 and 8.1 test VMs for libvirt |
 
+Licensed under the Apache License 2.0; the text is in `LICENSE`.
+
 On Linux, `just check` runs rustfmt, clippy at pedantic level with warnings as errors, and the tests. Windows builds need a nightly toolchain with the Tier 3 `x86_64-win7-windows-msvc` target, as section 10 of the spec describes.
