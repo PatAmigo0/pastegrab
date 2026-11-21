@@ -50,7 +50,7 @@ ProSportsAnalyzer tells us a little about his PC. Its 64-bit 1.8 build runs ther
 
 | Fact | Consequence |
 |---|---|
-| Windows 8.0 lost support in January 2016 | Upgrade an 8.0 machine to 8.1 before installing anything |
+| Windows 8.0 lost support in January 2016 | Nobody can upgrade his PC, so the lab tests 8.0 as well as 8.1 |
 | Rust's tier 1 Windows targets need Windows 10 | Tier 3 `*-win7-windows-*` targets, built with `-Zbuild-std` because no prebuilt std exists for them |
 | WebView2 Runtime 109 was the last one for 8.1 | No Tauri, no HTML UI |
 | Node removed 8.1 from its support table and checks for Windows 10 at startup | No Node or Deno for yt-dlp; QuickJS instead |
@@ -174,9 +174,9 @@ UI thread ──Command──▶ core thread ──spawn──▶ worker threads
 ### Domain model
 
 - `Link` holds a cleaned URL, site, kind, id and hints such as a playlist or a start time. Only the link pipeline can build its `CleanUrl`.
-- `MediaInfo` holds the title, duration, thumbnail, a `Box<[Format]>`, a live flag and playlist entries.
-- `Format` holds an id, a container, an optional video stream with codec, height and fps, an optional audio stream with codec and bitrate, and a size or an estimate.
-- `Plan` holds the exact format ids to fetch, an optional `TranscodeSpec` and the expected size.
+- `MediaInfo` holds the title, the duration, a live flag and every `Format`. Thumbnail and playlist entries join with the yt-dlp adapter.
+- `Format` holds yt-dlp's id, an optional video stream with codec, height and fps, an optional audio stream with codec and bitrate, a size or a bitrate for estimates, the protocol and a DRM flag.
+- `FetchPlan` holds the exact format ids, the merge container, the section and the expected size. `Convert` holds a copy, encode or drop decision per stream and the exact cut.
 - `JobState` runs `Queued → Probing → Ready → Fetching → Converting → Done`, plus `Paused`, `Cancelled` and `Failed(FailureKind)`. Transitions are one pure function with an exhaustive table test.
 - The scheduler is pure too. Given the state and the free permits, it returns the steps to start; the permits allow two probes, two fetches and one conversion at once. Threads only carry out its decisions, which keeps scheduling tests free of threads.
 
@@ -230,26 +230,27 @@ Around the pipeline:
 
 ## 6. Format planning
 
-**The planner picks source streams so that the output needs no re-encode whenever the site offers a matching codec.** `plan(&MediaInfo, &Profile, &Machine) -> Plan` is a pure function with golden tests.
+**The planner picks source streams so that the output needs no re-encode whenever the site offers a matching codec.** It runs in two pure steps. `plan_fetch` picks exact format ids from yt-dlp's list before the download. `plan_convert` decides copy, encode or drop per stream afterwards, from what ffprobe finds in the real file, because yt-dlp's list never says whether a video is interlaced. Local files go through the second step only.
 
-| Profile | Container | Video | Audio |
+| Label | Container | Video | Audio |
 |---|---|---|---|
-| Video, plays everywhere | MP4 | H.264 up to the height cap | AAC |
-| Video, best quality | MKV | best available, VP9 or AV1 included | best available |
-| Small | MP4 | H.264, 480p at most | AAC |
-| Audio | M4A | none | AAC, copied when offered |
-| Audio, MP3 | MP3 | none | MP3 V2 |
-| For analysis | MP4 | H.264, highest frame rate first, then height up to 1080p | AAC |
+| «Видео» | MP4 | H.264 up to the height cap | AAC |
+| «Видео, лучшее качество» | MKV | best available, VP9 or AV1 included | best available |
+| «Видео, малый размер» | MP4 | H.264, 480p at most | AAC |
+| «Только звук» | M4A | none | AAC, copied when offered |
+| «Только звук, MP3» | MP3 | none | MP3 V2 |
+| «Для анализа» | MP4 | H.264, highest frame rate first, then height up to 1080p | AAC |
 
-"Video, plays everywhere" is the default, and music sites default to "Audio". "Best quality" files need VLC or MPC-HC on Windows 8, and the profile's description says so.
+«Видео» is the default, and music sites default to «Только звук». Files from «Видео, лучшее качество» need VLC or MPC-HC on Windows 8, and the detail line under the label says so.
 
 Selection:
 
 1. Drop DRM formats, storyboards and protocols nothing here can fetch.
 2. For video, the tallest format at or under the cap with the profile's codec wins. If no format has that codec, the tallest one that fits wins and a transcode gets planned.
-3. Audio follows the same rule with the profile's audio codec.
-4. Ties go to the smaller file.
-5. The plan names exact format ids such as `137+140`. A selector string would let yt-dlp choose again at fetch time, and the plan would stop being testable.
+3. «Для анализа» ranks frame rate above everything else. 60 fps VP9 beats 30 fps H.264, because conversion keeps the frame rate and nothing brings lost motion back.
+4. Audio follows the codec rule with the profile's audio codec, then the bitrate.
+5. Ties go to the codec that is cheaper to decode, VP9 before AV1 on an old CPU, then to the smaller file.
+6. The plan names exact format ids such as `137+140`. A selector string would let yt-dlp choose again at fetch time, and the plan would stop being testable.
 
 The "Auto" height cap is the largest of 360, 480, 720, 1080, 1440 and 2160 that fits the screen. A 1366×768 laptop gets 720p.
 
@@ -262,9 +263,9 @@ Conversion:
 - ffmpeg runs at `BELOW_NORMAL_PRIORITY_CLASS` and reports through `-progress pipe:1 -stats_period 0.5`. One conversion runs at a time.
 - Local files take the same path. Dropping a file or pressing "Convert a file" runs ffprobe, then the planner.
 
-Old broadcast footage adds two rules. Interlaced sources get `bwdif=mode=send_field` whenever they are transcoded, and always under "For analysis": 25 interlaced frames a second become 50 progressive ones, which doubles the motion samples a running-technique study works with. "For analysis" also keeps a keyframe at least every second, so scrubbing in ProSportsAnalyzer lands on exact frames.
+Old broadcast footage adds two rules. Interlaced sources get `bwdif=mode=send_field` whenever they are transcoded, and always under "For analysis": 25 interlaced frames a second become 50 progressive ones, which doubles the motion samples a running-technique study works with. Whenever it encodes, «Для анализа» also keeps a keyframe at least every second, so scrubbing in ProSportsAnalyzer lands on exact frames. An encode with no codec dictated by the profile goes to H.264, never to VP9 or AV1, whose encoders crawl on an old CPU.
 
-Olympic replays run for hours while a race lasts seconds. The preview card has "from" and "to" fields that become `--download-sections "*1:23:10-1:23:40"` with `--force-keyframes-at-cuts`: most of the replay never crosses the network, and the cut lands on the requested frame.
+Olympic replays run for hours while a race lasts seconds. The preview card has «с» and «по» fields that become `--download-sections "*1:23:10-1:23:40"`, and most of the replay never crosses the network. yt-dlp cuts on keyframes without encoding, then the convert step makes the exact cut while it encodes. The clip gets one encode, not two.
 
 ## 7. Engines
 
@@ -345,7 +346,7 @@ Failure kinds. The patterns sit in one table in `ytdlp`, tested against recorded
 
 - `ffmpeg.exe` and `ffprobe.exe` come from gyan.dev's essentials build, pinned at 8.1.1, as section 10 describes.
 - Encoder capabilities are probed once per ffmpeg version and cached in settings.
-- Arguments come from a pure function of `TranscodeSpec`, covered by golden tests.
+- Arguments come from a pure function of the planner's `Convert`, covered by golden tests.
 
 ### Process control
 
@@ -377,13 +378,14 @@ The UI is Russian. The name pastegrab, format and codec names such as MP4, H.264
 
 ### Visual design
 
-**Plain, calm and readable, built from Windows' own controls and colors, with nothing that glows or moves except a progress bar.** He is an older man, not a power user, and the window should look like a tool that has always been on his PC.
+**Plain, calm and readable, built from Windows' own controls and colors. Nothing glows, and short fades are the only motion besides the progress bar.** He is an older man, not a power user, and the window should look like a tool that has always been on his PC.
 
-- Native Win32 controls in the system's visual style, which on Windows 8 is already flat. No custom skin, gradient, shadow, glass, rounded cards, neon, emoji, illustration or animation.
+- Native Win32 controls in the system's visual style, which on Windows 8 is already flat. No custom skin, gradient, shadow, glass, rounded cards, neon, emoji or illustration.
+- Short fades keep the window alive. The preview card, a new row, the tutorial panel and a finished job's buttons fade in or out over 150 to 200 ms. Nothing loops or bounces, a fade never delays input, and the system switch «Показывать анимацию в Windows», read through `SPI_GETCLIENTAREAANIMATION`, turns them off. Windows 8 supports layered child windows, so a fade is one alpha value on a timer that stops when the fade ends.
 - Colors come from the system through `GetSysColor`, so his theme and High Contrast work. The single exception is a muted dark red for failure text, and High Contrast replaces it too.
 - Text uses the system message font, Segoe UI on Windows 8, at 11 pt instead of the default 9 pt, because small gray text is what an older reader loses first. Headings are semibold, never colored. Secondary text keeps a contrast of at least 4.5:1.
 - One column, a 16 px margin and 8 px gaps scaled with DPI, buttons at least 32 px tall. Every state has one main action, such as «Скачать» or «Открыть»; everything else is an ordinary button beside it.
-- Sentences stay short, and buttons carry Russian verbs such as «Скачать», «Повторить» and «Открыть папку». Profiles are named by purpose, «Видео, играет везде», «Только звук», «Для анализа», with MP4 or H.264 only in the detail line under them. No exclamation marks, no jokes, no «Упс».
+- Text uses the words he would use himself: plain nouns and verbs, no slogans, no clever phrasing. Buttons say «Скачать», «Повторить», «Открыть папку». Profiles are «Видео», «Видео, лучшее качество», «Видео, малый размер», «Только звук», «Только звук, MP3» and «Для анализа», with MP4 or 720p only in the detail line under them. No exclamation marks, no jokes, no «Упс».
 - A failure is one line next to its job: what happened and what to do. Modal dialogs appear only when he has to decide something.
 - Tooltips may repeat information, never carry it alone.
 - The app icon is one flat glyph, an arrow into a tray, in a single muted color.
@@ -460,7 +462,7 @@ The token and your chat ID come from your password manager at build time, into e
 - The release profile sets `opt-level = 3`, `lto = "fat"`, `codegen-units = 1`, `strip = true`, `panic = "unwind"`. Unwinding lets a worker panic fail one job instead of killing every download.
 - No PGO, since the hot work runs inside yt-dlp and ffmpeg.
 - Icon, version info and manifest come from `embed-resource` in `build.rs`.
-- The runtime dependencies are `url`, `linkify`, `serde`, `serde_json`, `ureq`, `rustls`, `webpki-roots`, `sha2`, `zip` with deflate only, `windows`, `log` and `thiserror`. Tests add `proptest` and `insta`. Tokio and regex stay out, since error patterns are substrings and routes are path templates. No image crate either, because WIC decodes thumbnails.
+- The runtime dependencies are `url`, `linkify`, `serde`, `serde_json`, `ureq`, `rustls`, `webpki-roots`, `sha2`, `zip` with deflate only, `windows`, `log` and `thiserror`. Tests add `proptest`. Tokio and regex stay out, since error patterns are substrings and routes are path templates. No image crate either, because WIC decodes thumbnails.
 - `cargo xtask imports` reads the PE import tables of `pastegrab.exe`, `ffmpeg.exe`, `ffprobe.exe`, `qjs.exe` and every DLL and `.pyd` in the yt-dlp folder. It fails on any DLL or function missing from `win81-exports.txt`, which the same tool generates once on a Windows 8.1 VM with `--dump-exports`. Delay-loaded imports are checked. Runtime `GetProcAddress` lookups are not, and the VM checklist covers those.
 - ffmpeg starts as gyan.dev's 8.1.1 essentials build, byte for byte the one ProSportsAnalyzer 1.8 runs on his PC. gyan lists Windows 10 as its floor, and the lab proves it on 8.0 and 8.1 before pastegrab relies on it. It already carries libx264, libmp3lame, libopus, libvpx, libaom, Media Foundation, DXVA2 and D3D11VA decoding, gnutls for https and ffmpeg's native legacy decoders, and its 702 imports include none of the Windows 10 functions checked so far.
 - Its weakness is size, about 97 MB per executable. A trimmed build of our own, made with mingw-w64 in a podman container and scripted in `tools/build/`, can replace it later behind the same `ToolStore` manifest, each removed component backed by the fixture matrix in section 11. QuickJS gets built that way from the start. At minimum a trimmed ffmpeg needs the demuxers mov, matroska, mpegts, hls, flv, asf, avi, mpegps, mp3, aac, ogg, flac and image2, the decoders h264, hevc, vp8, vp9, libdav1d, mpeg2video, mpeg4, h263, flv, vp6f, wmv1, wmv2, wmv3, vc1, aac, mp3, mp2, ac3, wmav2, opus, vorbis, mjpeg, png and webp, the encoders libx264, aac, libmp3lame, mjpeg, png and gif, the bwdif filter, and https through mbedTLS for the cases where yt-dlp hands ffmpeg a URL. The legacy decoders cover old broadcast archives. x264 makes either build GPL, and pastegrab only spawns it.
@@ -486,7 +488,7 @@ The installer settles the machine check, the tuned defaults, the prerequisites, 
 ## 11. Testing
 
 - The link pipeline gets table tests from `tests/links.tsv`, and every link the person reports as misread becomes a row. Property tests check that cleaning is idempotent, that no input panics, and that every output re-parses to itself. `cargo fuzz` targets cover the pipeline and the progress parser.
-- The planner gets `insta` snapshots over recorded summaries from YouTube, VK, Rutube, TikTok and Vimeo, plus a direct file and an HLS stream.
+- Planner tests assert exact format ids and stream actions over format lists shaped like YouTube's, an HLS-only broadcast and an old archive item, plus ffprobe results. Recorded yt-dlp output from real sites joins them with the yt-dlp adapter.
 - `ScriptedRunner` replays recorded yt-dlp and ffmpeg transcripts, failures included, and adapter tests assert the emitted events and failure kinds.
 - Each contract suite in `testkit` runs against the adapter and the fake.
 - Live smoke tests are `#[ignore]` and run before each release, one short public video per site in the corpus.
