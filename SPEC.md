@@ -567,11 +567,12 @@ Work the design avoids:
 
 ### Per-CPU builds
 
-**QuickJS gets one build per CPU level, and nothing else does, because only QuickJS spends seconds of CPU per video in code compiled without runtime dispatch.**
+**Nothing gets a per-CPU build, because the one CPU-heavy part without runtime dispatch, QuickJS, measured no faster for one.** On a captured YouTube challenge, in interleaved runs on one core, `-O3`, LTO and x86-64-v2 or v3 ran no faster than the shipped `-O2`, and PGO gained about 4%. `docs/platform.md` has the numbers.
 
-- The variants are x86-64, x86-64-v2 and x86-64-v3, each at `-O3` with LTO and with PGO trained on captured YouTube challenge scripts. The release manifest lists them by level, and setup picks one from CPUID, which it already reads for the machine profile.
-- pastegrab's own binaries stay baseline x86-64. A UI that waits on pipes gains nothing measurable from AVX2.
+- pastegrab's own binaries stay baseline x86-64. A UI that waits on pipes gains nothing from AVX2 either.
 - ffmpeg and x264 choose their SIMD code at runtime, and python-build-standalone's Windows build is already PGO-optimized.
+- The release manifest can still list variants by CPU level, and setup reads CPUID for the machine profile anyway, so a future component that does benefit needs no new mechanism.
+- The lever for YouTube's challenge is how often it runs, not how fast: yt-dlp keeps nothing between runs, so every probe pays it in full. Whether one yt-dlp process reuses a solved player across several links gets measured with the yt-dlp adapter, and pastegrab batches probes if it does.
 
 ## 13. Milestones
 
