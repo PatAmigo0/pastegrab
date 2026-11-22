@@ -24,6 +24,7 @@ pub(crate) fn report(machine: &Machine, tuning: Tuning, checks: &[Check], s: &St
             .unwrap_or(u64::MAX);
         match (&check.result, check.probe) {
             (Ok(_), Probe::Encode) => (r.encode)(tenths),
+            (Ok(version), probe) if version.is_empty() => (r.works)(tool(probe), tenths),
             (Ok(version), probe) => (r.works)(&format!("{} {version}", tool(probe)), tenths),
             (Err(reason), probe) => (r.broken)(tool(probe), reason),
         }
@@ -131,7 +132,9 @@ mod tests {
         old.ucrt = false;
         old.hdd = None;
         old.ram_mib = 3584;
-        let text = report(&old, Tuning::default(), &[], &RU);
+        let checks = [check(Probe::QuickJs, Ok(""), 140)];
+        let text = report(&old, Tuning::default(), &checks, &RU);
+        assert!(text.contains("\nQuickJS: работает, 0,1 с\n"), "{text}");
         assert!(text.starts_with("Windows 8, сборка 9200\n"), "{text}");
         assert!(text.contains("Память: 3,5 ГБ\n"), "{text}");
         assert!(text.contains("Свободно на диске: 117 ГБ\n"), "{text}");

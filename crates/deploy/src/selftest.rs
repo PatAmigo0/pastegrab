@@ -32,7 +32,7 @@ pub enum Probe {
 pub struct Check {
     /// The probe.
     pub probe: Probe,
-    /// The version, the computed value, or nothing for the encode; the reason on failure.
+    /// The version, or nothing for the encode and `QuickJS`; the reason on failure.
     pub result: Result<String, String>,
     /// How long it ran.
     pub took: Duration,
@@ -89,6 +89,7 @@ pub fn run(sidecars: &Sidecars, preset: Preset) -> Vec<Check> {
             let answer = run_limited(command, LIMIT);
             let result = match (probe, answer) {
                 (Probe::Encode, Ok(_)) => Ok(String::new()),
+                (Probe::QuickJs, Ok(out)) if out.trim() == "42" => Ok(String::new()),
                 (_, Ok(out)) => first_line_after(&out, prefix)
                     .ok_or_else(|| format!("an unexpected answer: {}", out.trim())),
                 (_, Err(e)) => Err(e),
