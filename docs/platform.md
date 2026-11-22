@@ -61,11 +61,15 @@ The killed job left its `.pastegrab-1` folder in the destination. 8.0 hasn't run
 
 **`pastegrab-setup.exe` installed everything on the 8.1 VM in about two seconds, and the installed tools downloaded a video.** The build carried 57 MB that unpack to 251 MB in 503 files: the standalone Python package, QuickJS, gyan's ffmpeg and ffprobe, and `pgcli.exe` standing in for the window. The task dialog asked «Установить pastegrab?» with the size and folder, showed the progress bar, and ended on «pastegrab установлен». The installed `pgcli.exe` then fetched `jNQXAC9IVRw` with the installed tools only.
 
+**Setup adds both shortcuts and the Programs and Features entry, and `--uninstall` takes them back.** On the 8.1 VM reverted to `ucrt`, the last page said «Значок pastegrab появился на рабочем столе и в списке приложений», and «Открыть pastegrab» started the window. The `HKCU` entry listed version 0.1.0, 248,110 KB and `"...\app\pastegrab.exe" --uninstall`. That command asked to close the window while it was open. With the window closed it asked «Удалить pastegrab?», then removed the install folder, the data folder, both shortcuts and the entry. The exe moved itself to `%TEMP%\pastegrab-uninstall-<pid>.exe`, 2.8 MB, and stays there.
+
 A copy carrying the browser's internet mark, opened from Explorer, raised «Открыть файл - предупреждение системы безопасности» with «Неизвестный издатель» and «Запустить». Windows shows that dialog when SmartScreen is off, and the lab VMs have SmartScreen unset because the unattended install skipped the first-run screen that turns it on.
 
 ## Window
 
 **The window, installed by the setup, ran the whole flow on the 8.1 VM.** Started with no arguments, it found a YouTube link on the clipboard and showed the card «Me at the zoo», «youtube.com · 0:19 · около 632 КБ». A second start with an archive.org link handed it to the running window and exited, leaving one process. «Скачать» started both jobs; the list showed «Загрузка 46%, 118 КБ/с» for the direct file, then «Готово» for both. The row menu's «Показать в папке» opened Explorer with the file selected, and Explorer drew thumbnails for both videos.
+
+A `settings.json` naming the Desktop moved «Сохранять в:» there at the next start. PowerShell wrote that file with a UTF-8 byte order mark, as Notepad on Windows 8 does. `serde_json` refuses the mark, and the loader skips it.
 
 A window that Task Scheduler starts doesn't get the foreground, so keys sent to the VM land elsewhere until a click activates it; `lab/click` does that through the USB tablet.
 

@@ -494,11 +494,11 @@ Everything is per-user, and nothing needs admin rights. A `portable.txt` beside 
 3. It unpacks its payload next to the install folder and swaps it in, which leaves an old install whole when anything fails. Nothing downloads, and a setup that fetches executables looks like a dropper to antivirus heuristics. It installs per-user, with no admin rights and no UAC prompt.
 4. If `ucrtbase.dll` is missing, setup runs Microsoft's VC++ redistributable behind a UAC prompt, because the Python under yt-dlp needs the UCRT. It installs the UCRT system-wide down to Windows 8.0; the lab's 8.0 VM got its UCRT that way. His PC already has it, by the ProSportsAnalyzer evidence.
 5. It writes `deploy.json` with the machine profile and the path and version of every tool. The app reads that file at startup instead of probing hardware on every launch.
-6. It creates the Start menu shortcut and an uninstall entry under `HKCU` that runs `pastegrab.exe --uninstall`. From M4 it also registers the `pastegrab:` protocol.
+6. It puts shortcuts on the desktop and in the Start menu, since 8.1 lists a new program only in the Start screen's app view, and adds an uninstall entry under `HKCU` that runs `pastegrab.exe --uninstall`. The uninstall removes the install, the data folder, both shortcuts and the entry, and leaves downloaded videos alone. A running program can't delete its own file, and scheduling that for the next boot needs admin rights, so the exe moves itself to `%TEMP%` and stays there. From M4 setup also registers the `pastegrab:` protocol.
 7. It runs a self-test: each tool's `--version`, a one-second ffmpeg encode of a test pattern, a QuickJS one-liner. The results and the machine profile go into a Russian report on the last screen.
 8. Nothing leaves his PC on its own. The report screen, and every failure in the app, has «Отправить разработчику», which shows the exact text first. Section 9 describes the transport under Reports.
 
-The first setup asks with a Windows task dialog, unpacks with a progress bar and reports where the program went, as `docs/platform.md` shows. The machine profile, the UCRT step, `deploy.json`, the shortcut, the uninstall entry, the self-test and the report come with the app's window.
+Setup asks with a Windows task dialog, unpacks with a progress bar, adds the shortcuts and the uninstall entry, and ends on a page with «Открыть pastegrab», as `docs/platform.md` shows. The machine profile, the UCRT step, `deploy.json`, the self-test and the report come next.
 
 Steps 1 to 5 live in the `deploy` crate, and the app's yt-dlp updater calls the same code. Installs and updates share one tested path, and running setup again repairs or updates an install.
 
@@ -597,13 +597,13 @@ Still open:
 
 `domain`, `app`, `ytdlp`, `ffmpeg`, `http`, `store` and the CLI. Done when the CLI downloads and converts every corpus link on Linux and every contract suite passes.
 
-Everything but `store` exists. `pgcli` downloads and converts from YouTube, VK, Rutube, OK.ru and archive.org on Linux, and `pgcli.exe` does the same on the 8.1 VM with the bundled tools, as `docs/platform.md` records. `pgcli --plan` probes a link and prints the planner's pick without downloading. Contract suites exist for `Files` and `ProcessRunner`.
+Everything exists, with `store` keeping only `settings.json`; `queue.json` comes with resume after restart in M3. `pgcli` downloads and converts from YouTube, VK, Rutube, OK.ru and archive.org on Linux, and `pgcli.exe` does the same on the 8.1 VM with the bundled tools, as `docs/platform.md` records. `pgcli --plan` probes a link and prints the planner's pick without downloading. Contract suites exist for `Files`, `ProcessRunner` and `SettingsStore`.
 
 ### M2 Windows UI
 
 The `win32` adapter, `pastegrab-setup.exe`, the tutorial, app self-update with rollback, Telegram reports, the VM checklist. Done when his footage sources work in both lab VMs within budget, setup's report arrives in your Telegram, and an update rolls out and back in the lab.
 
-The window runs on the 8.1 VM, installed by the setup: the link box with paste-anywhere and clipboard pickup, the card with title, length, size and profile, the job list with live progress and its menu, the folder picker, and one window per user that takes the links of a second start. Fades, the tutorial, taskbar progress, the tray balloon and per-monitor DPI come next.
+The window runs on the 8.1 VM, installed by the setup: the link box with paste-anywhere and clipboard pickup, the card with title, length, size and profile, the job list with live progress and its menu, the folder picker, and one window per user that takes the links of a second start. The folder and the profile he picks last are kept in `settings.json`. Fades, the tutorial, taskbar progress, the tray balloon and per-monitor DPI come next.
 
 ### M3 hardening
 
