@@ -11,7 +11,7 @@ use pastegrab_domain::plan::{FetchPlan, Machine, Section, plan_fetch};
 use pastegrab_domain::profile::ProfileKind;
 
 use crate::failure::Failure;
-use crate::ports::{Resolved, Source, ViewUpdate};
+use crate::ports::{Choices, Resolved, Source, ViewUpdate};
 
 /// How often a retryable failure sends a job back to the probe.
 const MAX_RETRIES: u8 = 2;
@@ -63,6 +63,8 @@ pub enum Input {
     Profile(JobId, ProfileKind),
     /// Another destination folder for jobs that haven't started their download.
     Dest(PathBuf),
+    /// The profile later video links start with.
+    DefaultProfile(ProfileKind),
     /// A worker finished a step.
     Done(JobId, Outcome),
 }
@@ -107,6 +109,8 @@ pub enum Effect {
     Stop(JobId),
     /// Tell the view.
     Show(ViewUpdate),
+    /// Keep the person's choices for the next start.
+    Save(Choices),
 }
 
 /// A step with everything its worker needs.
@@ -234,7 +238,15 @@ impl Queue {
                 }
             }
             Input::Profile(id, profile) => self.reprofile(id, profile, &mut fx),
-            Input::Dest(dest) => self.settings.dest = dest,
+            Input::Dest(dest) if dest != self.settings.dest => {
+                self.settings.dest = dest;
+                fx.push(self.choices());
+            }
+            Input::DefaultProfile(profile) if profile != self.settings.profile => {
+                self.settings.profile = profile;
+                fx.push(self.choices());
+            }
+            Input::Dest(_) | Input::DefaultProfile(_) => {}
             Input::Done(id, outcome) => self.done(id, outcome, &mut fx),
         }
         self.start_steps(&mut fx);
@@ -403,6 +415,13 @@ impl Queue {
         } else {
             fx.push(Effect::Show(ViewUpdate::Failed { id, failure }));
         }
+    }
+
+    fn choices(&self) -> Effect {
+        Effect::Save(Choices {
+            dest: Some(self.settings.dest.clone()),
+            profile: Some(self.settings.profile),
+        })
     }
 
     fn reprofile(&mut self, id: JobId, profile: ProfileKind, fx: &mut Vec<Effect>) {

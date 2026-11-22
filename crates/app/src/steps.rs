@@ -10,11 +10,12 @@ use pastegrab_domain::plan::plan_convert;
 use crate::cancel::Cancel;
 use crate::failure::Failure;
 use crate::ports::{
-    FetchRequest, Fetcher, Files, MediaProbe, ProgressSink, Resolved, Resolver, Transcoder,
+    FetchRequest, Fetcher, Files, MediaProbe, ProgressSink, Resolved, Resolver, SettingsStore,
+    Transcoder,
 };
 use crate::queue::{ConvertTask, FetchTask, ProbeTask};
 
-/// The adapters steps run with, wired once in the composition root.
+/// The adapters the steps and the runtime use, wired once in the composition root.
 pub struct Ports {
     /// Tried in order; the first that accepts a link resolves it.
     pub resolvers: Vec<Box<dyn Resolver>>,
@@ -26,6 +27,8 @@ pub struct Ports {
     pub transcoder: Box<dyn Transcoder>,
     /// Places them.
     pub files: Box<dyn Files>,
+    /// Keeps the person's choices; a run without one forgets them.
+    pub settings: Option<Box<dyn SettingsStore>>,
 }
 
 /// Asks the first resolver that accepts the link.

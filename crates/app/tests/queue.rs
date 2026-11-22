@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use pastegrab_app::Failure;
-use pastegrab_app::ports::{Resolved, Source, ViewUpdate};
+use pastegrab_app::ports::{Choices, Resolved, Source, ViewUpdate};
 use pastegrab_app::queue::{Effect, Input, Outcome, Paste, Queue, Settings, Task};
 use pastegrab_domain::job::{FailureKind, JobId, JobState, Permits, Step};
 use pastegrab_domain::plan::{Machine, PlanError};
@@ -227,4 +227,23 @@ fn another_folder_applies_to_fetches_that_start_after_it() {
         _ => None,
     });
     assert_eq!(work, Some(PathBuf::from("/elsewhere/.pastegrab-1")));
+}
+
+#[test]
+fn a_new_folder_or_default_profile_is_saved_once() {
+    let mut q = queue();
+    let saved = Effect::Save(Choices {
+        dest: Some(PathBuf::from("/elsewhere")),
+        profile: Some(ProfileKind::Video),
+    });
+    assert_eq!(q.handle(Input::Dest(PathBuf::from("/elsewhere"))), [saved]);
+    assert_eq!(q.handle(Input::Dest(PathBuf::from("/elsewhere"))), []);
+    let saved = Effect::Save(Choices {
+        dest: Some(PathBuf::from("/elsewhere")),
+        profile: Some(ProfileKind::Analysis),
+    });
+    assert_eq!(
+        q.handle(Input::DefaultProfile(ProfileKind::Analysis)),
+        [saved]
+    );
 }

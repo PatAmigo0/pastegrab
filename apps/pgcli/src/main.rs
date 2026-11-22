@@ -135,6 +135,7 @@ fn run() -> Result<ExitCode, String> {
         probe: Box::new(ffmpeg.clone()),
         transcoder: Box::new(ffmpeg),
         files: Box::new(LocalFiles),
+        settings: None,
     };
     let queue = Queue::new(Settings {
         profile: ProfileKind::Video,

@@ -45,6 +45,7 @@ fn run(text: &str, probe: FileProbe, fetch_failures: Vec<Result<(), Failure>>) -
         probe: Box::new(FakeProbe(probe)),
         transcoder: Box::new(FakeTranscoder::new(files.clone())),
         files: Box::new(files.clone()),
+        settings: None,
     };
     let queue = Queue::new(Settings {
         profile: ProfileKind::Video,

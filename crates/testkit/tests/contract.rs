@@ -4,12 +4,17 @@ use std::path::{Path, PathBuf};
 
 use pastegrab_app::ports::ProcSpec;
 use pastegrab_testkit::contract::{self, Programs};
-use pastegrab_testkit::{MemFiles, ScriptedRunner, Transcript};
+use pastegrab_testkit::{MemFiles, MemSettings, ScriptedRunner, Transcript};
 
 #[test]
 fn mem_files_keep_the_files_contract() {
     let files = MemFiles::default();
     contract::files(&files, Path::new("/videos"), &|path| files.create(path));
+}
+
+#[test]
+fn mem_settings_keep_the_settings_contract() {
+    contract::settings(&MemSettings::default());
 }
 
 #[test]

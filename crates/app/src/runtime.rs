@@ -66,6 +66,12 @@ pub fn start(
             for effect in queue.handle(input) {
                 match effect {
                     Effect::Show(update) => view.apply(update),
+                    // An unsaved choice still holds until the window closes.
+                    Effect::Save(choices) => {
+                        if let Some(store) = &ports.settings {
+                            let _ = store.save(&choices);
+                        }
+                    }
                     Effect::Stop(id) => {
                         if let Some((_, cancel)) = running.remove(&id) {
                             cancel.cancel();

@@ -9,14 +9,15 @@
 )]
 
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
 use pastegrab_app::Cancel;
-use pastegrab_app::ports::{Files, Lines, ProcSpec, ProcessRunner};
+use pastegrab_app::ports::{Choices, Files, Lines, ProcSpec, ProcessRunner, SettingsStore};
 use pastegrab_domain::job::FailureKind;
+use pastegrab_domain::profile::ProfileKind;
 
 /// `place` moves without ever replacing, and `remove_tree` takes a folder and everything in it.
 /// `create` makes a file, parent folders included.
@@ -49,6 +50,23 @@ pub fn files(files: &dyn Files, root: &Path, create: &dyn Fn(&Path)) {
     files.remove_tree(&work).expect("a work folder goes");
     assert!(!files.exists(&deep));
     files.remove_tree(&work).expect("a missing folder is fine");
+}
+
+/// A fresh store has nothing, a save reads back whole, and the next save replaces it.
+pub fn settings(store: &dyn SettingsStore) {
+    assert_eq!(store.load(), None, "a fresh store has no choices");
+    let first = Choices {
+        dest: Some(PathBuf::from("D:\\Видео\\Забеги")),
+        profile: Some(ProfileKind::Analysis),
+    };
+    store.save(&first).expect("a save");
+    assert_eq!(store.load(), Some(first));
+    let second = Choices {
+        dest: None,
+        profile: Some(ProfileKind::Audio),
+    };
+    store.save(&second).expect("a second save");
+    assert_eq!(store.load(), Some(second));
 }
 
 /// The programs the runner contract starts.

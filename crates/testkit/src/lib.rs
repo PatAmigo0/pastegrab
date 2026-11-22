@@ -14,8 +14,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use pastegrab_app::ports::{
-    FetchRequest, Fetcher, Files, MediaProbe, Phase, Progress, ProgressSink, Resolved, Resolver,
-    Source, Transcoder, View, ViewUpdate,
+    Choices, FetchRequest, Fetcher, Files, MediaProbe, Phase, Progress, ProgressSink, Resolved,
+    Resolver, SettingsStore, Source, Transcoder, View, ViewUpdate,
 };
 use pastegrab_app::{Cancel, Failure};
 use pastegrab_domain::job::JobId;
@@ -37,6 +37,21 @@ fn next<T: Clone>(answers: &Mutex<VecDeque<T>>) -> Option<T> {
         answers.pop_front()
     } else {
         answers.front().cloned()
+    }
+}
+
+/// Choices kept in memory.
+#[derive(Clone, Default)]
+pub struct MemSettings(Arc<Mutex<Option<Choices>>>);
+
+impl SettingsStore for MemSettings {
+    fn load(&self) -> Option<Choices> {
+        lock(&self.0).clone()
+    }
+
+    fn save(&self, choices: &Choices) -> io::Result<()> {
+        *lock(&self.0) = Some(choices.clone());
+        Ok(())
     }
 }
 

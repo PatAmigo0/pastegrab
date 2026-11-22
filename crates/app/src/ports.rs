@@ -227,6 +227,28 @@ pub trait Files: Send + Sync {
     fn remove_tree(&self, path: &Path) -> io::Result<()>;
 }
 
+/// What the person chose and keeps across starts.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Choices {
+    /// Where finished files go; `None` keeps the Videos folder.
+    pub dest: Option<PathBuf>,
+    /// The profile video links start with; `None` keeps «Видео».
+    pub profile: Option<ProfileKind>,
+}
+
+/// Keeps the person's choices.
+pub trait SettingsStore: Send + Sync {
+    /// The saved choices; `None` before the first save or when the file can't be read.
+    fn load(&self) -> Option<Choices>;
+
+    /// Replaces the saved choices, all at once or not at all.
+    ///
+    /// # Errors
+    ///
+    /// Errors from the operating system.
+    fn save(&self, choices: &Choices) -> io::Result<()>;
+}
+
 /// What the person should see change.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ViewUpdate {
