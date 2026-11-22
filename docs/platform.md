@@ -71,6 +71,8 @@ A copy carrying the browser's internet mark, opened from Explorer, raised «От
 
 **While `Cops1922` downloaded, the taskbar button filled along with its row, both at 29%, and `powercfg /requests` listed `pastegrab.exe` under SYSTEM.** Both cleared when the job reached «Готово».
 
+With the window minimized, «Me at the zoo» finished under a tray balloon, «Видео скачано» over the title. A click on the balloon restored the window and took the tray icon away.
+
 A `settings.json` naming the Desktop moved «Сохранять в:» there at the next start. PowerShell wrote that file with a UTF-8 byte order mark, as Notepad on Windows 8 does. `serde_json` refuses the mark, and the loader skips it.
 
 A window that Task Scheduler starts doesn't get the foreground, so keys sent to the VM land elsewhere until a click activates it; `lab/click` does that through the USB tablet.
