@@ -94,12 +94,18 @@ pub struct Startup {
     pub text: String,
 }
 
-/// Shows the window and runs its message loop until the person closes it.
+/// Shows the window, calls `shown` once it is on screen, and runs its message loop until the
+/// person closes it.
 ///
 /// # Errors
 ///
 /// The system's reason when the window can't be created.
-pub fn run(core: Handle, view: Arc<WinView>, startup: Startup) -> Result<(), String> {
+pub fn run(
+    core: Handle,
+    view: Arc<WinView>,
+    startup: Startup,
+    shown: impl FnOnce(),
+) -> Result<(), String> {
     let common = INITCOMMONCONTROLSEX {
         dwSize: size_u32::<INITCOMMONCONTROLSEX>(),
         dwICC: ICC_LISTVIEW_CLASSES | ICC_STANDARD_CLASSES,
@@ -152,10 +158,14 @@ pub fn run(core: Handle, view: Arc<WinView>, startup: Startup) -> Result<(), Str
         )
     }
     .map_err(|e| e.to_string())?;
-    // SAFETY: the window belongs to this thread, and `msg` is ours.
+    // SAFETY: the window belongs to this thread.
     unsafe {
         let _ = ShowWindow(hwnd, SW_SHOWNORMAL);
         let _ = UpdateWindow(hwnd);
+    }
+    shown();
+    // SAFETY: as above, and `msg` is ours.
+    unsafe {
         let mut msg = MSG::default();
         while GetMessageW(&raw mut msg, None, 0, 0).0 > 0 {
             let ctrl = GetKeyState(i32::from(VK_CONTROL.0)) < 0;
