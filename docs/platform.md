@@ -53,6 +53,12 @@ The probe's layered child failed on 8.0 until its manifest listed Windows 8 unde
 
 The killed job left its `.pastegrab-1` folder in the destination. 8.0 hasn't run it yet.
 
+## Launcher
+
+**On the 8.1 VM the launcher rolled back a version that never opened its window on its third start.** A copy of the 0.1.0 build in `app\0.1.1`, staged on trial, ran twice with the trial count at 1 and then 2, because the window confirms only its own version. The third start ran `app\0.1.0` and listed 0.1.1 as rolled back. A version on trial that opened its window cleared the count itself. With the window open, a second start left the count alone and handed its links over, leaving one process. The uninstall entry, which starts the launcher with `--uninstall`, removed the install, the data folder, the shortcut and the entry.
+
+The launcher is 412 KB built with `opt-level = "z"`, against 550 KB at the release profile's level 3.
+
 ## Defender
 
 **Defender on 8.1 still gets current definitions, and 8.0's never moves past its install media.** On 2026-11-22 the 8.1 VM updated through Windows Update to engine 1.1.26100.4 and definitions 1.463.414.0. The 8.0 VM stayed at engine 1.1.8502.0 and definitions 1.129.21.0 and reported that no updates were needed. Neither flagged `pgcli.exe`, `qjs.exe` or the packed Python.

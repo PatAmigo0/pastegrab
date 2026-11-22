@@ -79,11 +79,14 @@ pastegrab/
     win32/    View over Win32, with taskbar progress and sleep prevention while work runs
     cli/      View over a terminal
     i18n/     one string table per language; no dependencies
-    deploy/   machine profile, build choice, verified downloads, tool installs, shortcuts and the
-              uninstall entry; used by setup, the updater and the uninstall
+    deploy/   machine profile, build choice, verified downloads, tool installs, the install's
+              layout and state.json, shortcuts and the uninstall entry; used by setup, the
+              launcher, the updater and the uninstall
+    update/   which signed release to install, and which version the launcher starts; no I/O
     testkit/  fakes and contract suites for every port
   apps/
-    pastegrab/   Windows GUI composition root
+    window/      Windows GUI composition root, built as pastegrab-app.exe
+    launcher/    pastegrab.exe, which starts the installed version
     pgcli/       CLI composition root
     setup/       pastegrab-setup.exe
   lab/           test VMs: libvirt XML, unattend files, the M0 harness, the API probe
@@ -442,7 +445,11 @@ Chrome 109, the last version for Windows 8, encrypts cookies with DPAPI, which y
 ## 9. Files and updates
 
 ```
-%LOCALAPPDATA%\Programs\pastegrab\pastegrab.exe
+%LOCALAPPDATA%\Programs\pastegrab\
+  pastegrab.exe             the launcher, which the shortcuts and the uninstall entry start
+  state.json                the version it starts, a new version's trial, versions rolled back
+  app\<version>\            pastegrab-app.exe and pgcli.exe
+  tools\                    Python with yt-dlp, QuickJS and ffmpeg, as setup unpacked them
 %LOCALAPPDATA%\pastegrab\
   deploy.json               machine profile and installed tool versions, written by setup
   settings.json, queue.json
@@ -461,7 +468,7 @@ Everything is per-user, and nothing needs admin rights. A `portable.txt` beside 
 - Before a fetch, free space must cover twice the expected size, because the video part, the audio part and the merged output exist together for a moment.
 - yt-dlp updates run at most daily, in the background after startup, and right away after `EngineOutdated`. The updater downloads the release's `yt-dlp` file, 3 MB of pure Python with yt-dlp-ejs inside, and `SHA2-256SUMS`. It checks the hash, unpacks into a new version folder with zip-slip checks, compiles the bytecode with the bundled Python, runs `--version` from the new folder, and only then switches `state.json`. A release that needs a newer Python fails that check and never goes live. Running jobs finish on the old folder, and the next start deletes it. A nightly channel setting covers weeks when YouTube moves faster than stable releases.
 - Python, ffmpeg and QuickJS are pinned and ship with app releases. Python is python-build-standalone's 3.11 install, pruned of Tcl/Tk, IDLE, pip, ensurepip, the test suite and the headers, which takes it from 95 MB to about 50 with yt-dlp's wheels. M0 loaded every `.dll` and `.pyd` in it on 8.0 and 8.1.
-- App self-update ships in the first version he gets, because nobody can reach his PC to install a fix. A manifest signed with minisign lists the new build, with a version number that only grows and an expiry date, so a replayed old manifest can't roll him back to a build with a known hole. `pastegrab.exe` is a small launcher that starts `app\<version>\pastegrab-app.exe`, and the previous version stays on disk. A new version that twice fails to reach its main window gets rolled back, and the next report he sends tells you.
+- App self-update ships in the first version he gets, because nobody can reach his PC to install a fix. A manifest signed with minisign lists the new build, with a version number that only grows and an expiry date, so a replayed old manifest can't roll him back to a build with a known hole. `pastegrab.exe` is a small launcher that starts `app\<version>\pastegrab-app.exe`, and the previous version stays on disk. A new version that twice fails to reach its main window gets rolled back, and the next report he sends tells you. The launcher counts each start in `state.json`, and the window clears the count once it is on screen; a start that only hands links to an open window doesn't count. The release manifest is `update.json`, signed by the key in `keys/release.pub`, with an expiry a year after signing, which also means a release older than a year needs a fresh signature before it reaches a PC that missed it.
 - Copy diagnostics puts app and tool versions, the Windows build, recent failures with the tail of their yt-dlp output, and the last 200 log lines on the clipboard. Cookies never reach the log, and neither does an info JSON.
 
 ### Reports
@@ -604,7 +611,7 @@ Everything exists, with `store` keeping only `settings.json`; `queue.json` comes
 
 The `win32` adapter, `pastegrab-setup.exe`, the tutorial, app self-update with rollback, Telegram reports, the VM checklist. Done when his footage sources work in both lab VMs within budget, setup's report arrives in your Telegram, and an update rolls out and back in the lab.
 
-The window runs on the 8.1 VM, installed by the setup: the link box with paste-anywhere and clipboard pickup, the card with title, length, size and profile, the job list with a progress bar in each running row, failures in muted red and its menu, the folder picker, and one window per user that takes the links of a second start. The folder and the profile he picks last are kept in `settings.json`. The taskbar button shows the average progress of the running steps, and Windows doesn't sleep while work runs. A job that finishes or fails for good while the window is in the background raises a tray balloon, and a click on it brings the window back. Every exe carries the icon drawn in `crates/winres/pastegrab.svg`. The card fades in over 180 ms unless Windows' animations are off. The tutorial, per-monitor DPI and the other fades come next.
+The window runs on the 8.1 VM, installed by the setup: the link box with paste-anywhere and clipboard pickup, the card with title, length, size and profile, the job list with a progress bar in each running row, failures in muted red and its menu, the folder picker, and one window per user that takes the links of a second start. The folder and the profile he picks last are kept in `settings.json`. The launcher starts the version `state.json` names and rolls back one that twice never opens its window, as `docs/platform.md` shows; the updater that downloads and stages a release comes next. The taskbar button shows the average progress of the running steps, and Windows doesn't sleep while work runs. A job that finishes or fails for good while the window is in the background raises a tray balloon, and a click on it brings the window back. Every exe carries the icon drawn in `crates/winres/pastegrab.svg`. The card fades in over 180 ms unless Windows' animations are off. The tutorial, per-monitor DPI and the other fades come next.
 
 ### M3 hardening
 
