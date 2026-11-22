@@ -2,10 +2,10 @@
 //! and on Windows the shortcuts and the Programs and Features entry that point at an install.
 
 #[cfg(windows)]
-mod shell;
+mod sys;
 
 #[cfg(windows)]
-pub use shell::{Entry, register, unregister};
+pub use sys::{Entry, register, unregister};
 
 use std::env::{self, consts::EXE_SUFFIX};
 use std::ffi::OsString;
