@@ -73,6 +73,8 @@ A copy carrying the browser's internet mark, opened from Explorer, raised «От
 
 The job list draws the visual style's own green progress bar beside «Загрузка 9%, 1,2 МБ/с», on the selection color when the row is selected, and a deleted YouTube video's «Видео удалено или закрыто для вашей страны» in muted red. At 880 px, the window's default width, with the state column taking half the list, that failure line fits whole.
 
+After its fade the card is opaque with sharp text, and its profile list opens over the job list. The 180 ms fade itself is too quick for the lab's screenshots.
+
 With the window minimized, «Me at the zoo» finished under a tray balloon, «Видео скачано» over the title. A click on the balloon restored the window and took the tray icon away.
 
 A `settings.json` naming the Desktop moved «Сохранять в:» there at the next start. PowerShell wrote that file with a UTF-8 byte order mark, as Notepad on Windows 8 does. `serde_json` refuses the mark, and the loader skips it.
