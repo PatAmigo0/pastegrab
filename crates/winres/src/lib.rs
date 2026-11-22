@@ -1,6 +1,6 @@
-//! Version info and a manifest for every Windows exe pastegrab builds. Unknown exes without
-//! them look worse to antivirus heuristics, and Windows 8 needs the manifest for layered child
-//! windows. Elsewhere the build script call does nothing.
+//! Version info, the icon and a manifest for every Windows exe pastegrab builds. Unknown exes
+//! without them look worse to antivirus heuristics, and Windows 8 needs the manifest for layered
+//! child windows. Elsewhere the build script call does nothing.
 
 #![forbid(unsafe_code)]
 
@@ -20,13 +20,20 @@ pub enum Kind {
     Setup,
 }
 
-/// Links version info and a manifest into `file`, such as `pgcli.exe`, from a build script.
-/// A failure stops the build with a `cargo::error` line.
+/// The icon, rendered from `pastegrab.svg` by `just icon`.
+const ICON: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/pastegrab.ico");
+
+/// The icon's resource id; `win32` loads it by this number for the title bar and taskbar.
+const ICON_ID: u16 = 1;
+
+/// Links version info, the icon and a manifest into `file`, such as `pgcli.exe`, from a build
+/// script. A failure stops the build with a `cargo::error` line.
 #[expect(
     clippy::print_stdout,
     reason = "cargo reads build script directives from stdout"
 )]
 pub fn embed(kind: Kind, file: &str, description: &str) {
+    println!("cargo::rerun-if-changed={ICON}");
     if let Err(e) = try_embed(kind, file, description) {
         println!("cargo::error={e}");
     }
@@ -37,15 +44,16 @@ fn try_embed(kind: Kind, file: &str, description: &str) -> Result<(), String> {
     let manifest = out.join("app.manifest");
     fs::write(&manifest, manifest_xml(kind)).map_err(|e| format!("{}: {e}", manifest.display()))?;
     let rc = out.join("app.rc");
-    let path = manifest.to_string_lossy().replace('\\', "\\\\");
-    fs::write(&rc, resource_script(file, description, &path))
+    let escape = |path: &str| path.replace('\\', "\\\\");
+    let paths = (escape(&manifest.to_string_lossy()), escape(ICON));
+    fs::write(&rc, resource_script(file, description, &paths.0, &paths.1))
         .map_err(|e| format!("{}: {e}", rc.display()))?;
     embed_resource::compile(&rc, embed_resource::NONE)
         .manifest_required()
         .map_err(|e| format!("{file}: {e}"))
 }
 
-fn resource_script(file: &str, description: &str, manifest: &str) -> String {
+fn resource_script(file: &str, description: &str, manifest: &str, icon: &str) -> String {
     let part = |name: &str| env::var(name).unwrap_or_else(|_| "0".into());
     let (major, minor, patch) = (
         part("CARGO_PKG_VERSION_MAJOR"),
@@ -86,6 +94,7 @@ BEGIN
   END
 END
 1 24 "{manifest}"
+{ICON_ID} ICON "{icon}"
 "#
     );
     rc
