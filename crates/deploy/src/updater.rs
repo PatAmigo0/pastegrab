@@ -47,6 +47,16 @@ pub enum Outcome {
     Staged(Version),
 }
 
+impl fmt::Display for Outcome {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UpToDate => f.write_str("up to date"),
+            Self::Waiting(version) => write!(f, "{version} waits for the next start"),
+            Self::Staged(version) => write!(f, "staged {version}"),
+        }
+    }
+}
+
 /// Why a check stopped.
 #[derive(Debug)]
 pub enum UpdateError {
@@ -389,5 +399,15 @@ mod tests {
             .collect();
         assert_eq!(names.len(), 1, "no download or half-unpacked folder stays");
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn outcomes_read_as_plain_words() {
+        assert_eq!(Outcome::UpToDate.to_string(), "up to date");
+        assert_eq!(
+            Outcome::Waiting(v("0.1.1")).to_string(),
+            "0.1.1 waits for the next start"
+        );
+        assert_eq!(Outcome::Staged(v("0.1.1")).to_string(), "staged 0.1.1");
     }
 }

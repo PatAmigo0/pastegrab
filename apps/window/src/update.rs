@@ -61,7 +61,7 @@ fn check(data: &Path) {
     }
     .run(now);
     let line = match &outcome {
-        Ok(outcome) => format!("{now} {outcome:?}\n"),
+        Ok(outcome) => format!("{now} {outcome}\n"),
         Err(e) => format!("{now} {e}\n"),
     };
     // The stamp counts only a check that got an answer, so a failed one runs again next start.
