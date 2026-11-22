@@ -59,7 +59,7 @@ The killed job left its `.pastegrab-1` folder in the destination. 8.0 hasn't run
 
 **An install of 0.1.0 on the 8.1 VM updated itself to 0.1.1 from a GitHub pre-release.** Started with `PASTEGRAB_RELEASES` pointing at the release, the window fetched `update.json` and its signature over rustls, through GitHub's redirect to its download host, downloaded the 1.5 MB package, checked its SHA-256 and unpacked it into `app\0.1.1`, staged on trial. The next plain start ran `app\0.1.1\pastegrab-app.exe`, whose version info reads 0.1.1, and its window cleared the trial.
 
-The launcher is 418 KB built with `opt-level = "z"`, against 550 KB at the release profile's level 3, and `pastegrab-app.exe` is 3.2 MB.
+The launcher is 418 KB built with `opt-level = "z"`, against 550 KB at level 3. For `pastegrab-app.exe`, `opt-level = "s"` cut the binary from 3.35 MB to 2.57 MB and the zstd update archive from 1.42 MB to 1.17 MB while keeping warm launch median at 80.7 ms versus 80.8 ms at level 3 and idle private memory at 1.64 MB. `ruzstd` stays at `opt-level = 3` for setup decompression.
 
 ## Defender
 
@@ -85,7 +85,9 @@ A copy carrying the browser's internet mark, opened from Explorer, raised «От
 - On first start, both VMs opened the five-step tutorial panel, adding five panel controls and four outline strips. On 8.1, Enter stepped from step 1 through step 5 to «Готово» and saved `"tutorial": 1` in `settings.json`; clicking «?» reopened all 9 child windows, and Esc faded them out and destroyed all 9. On 8.0, Esc skipped from step 1, saved `"tutorial": 1` and destroyed all 9 child windows.
 - Active rows showed `×` on the right of the state column, and clicking it on a running `Cops1922` download cancelled the job immediately with no lingering `python.exe`. Finished rows showed «Открыть» and «Папка»; clicking «Папка» on «Me at the zoo» opened Explorer with the file selected. Clicking «Очистить список» dropped both ended rows and disabled the button.
 - Encoding a local MPEG-2 test clip through `pastegrab-app.exe` on 8.1 produced an MP4 whose x264 SEI options `me=dia subme=1 trellis=0 mbtree=0 crf=23.0` matched `superfast` from `deploy.json`.
-- Private memory on 8.1 read 2.5 MB on first launch and 1.8 MB after finishing a YouTube download, against a 15 MB idle budget.
+- Private memory on 8.1 read 2.5 MB on first launch, 1.8 MB after finishing a YouTube download and 1.64 MB idle with the `opt-level = "s"` build, against a 15 MB idle budget.
+- The «Настройки» dialog on 8.1 saved clipboard pickup, close-to-tray, a 1080p video cap and 3 parallel downloads into `settings.json`, checked GitHub's signed `update.json` on demand, parked the window into the system tray on close and restored it when `pastegrab.exe` started again.
+- Leftover `.pastegrab-99`, `jobs\99` and `app\0.9.9.part` folders planted before start were swept on launch before the queue ran, and cancelling or closing a job removes its `.pastegrab-<id>` and `jobs\<id>` folders once the worker exits.
 
 **Warm launch time from `pastegrab.exe` to a visible window stays under the 150 ms budget on both VMs.** Five runs back to back, after one warm-up start, on each VM:
 

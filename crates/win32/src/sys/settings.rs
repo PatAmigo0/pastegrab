@@ -29,8 +29,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
     PostQuitMessage, RegisterClassExW, SW_SHOW, SendMessageW, SetForegroundWindow,
     SetWindowLongPtrW, SetWindowTextW, ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE,
     WM_APP, WM_CLOSE, WM_COMMAND, WM_CREATE, WM_DESTROY, WM_NCCREATE, WM_NCDESTROY, WM_SETFONT,
-    WNDCLASSEXW, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN, WS_EX_DLGMODALFRAME, WS_POPUP, WS_SYSMENU,
-    WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
+    WNDCLASSEXW, WS_CAPTION, WS_CHILD, WS_EX_DLGMODALFRAME, WS_POPUP, WS_SYSMENU, WS_TABSTOP,
+    WS_VISIBLE, WS_VSCROLL,
 };
 use windows::core::{HSTRING, PCWSTR, w};
 
@@ -79,7 +79,7 @@ pub(super) fn open(
     };
     register_class(instance);
 
-    let style = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN;
+    let style = WS_POPUP | WS_CAPTION | WS_SYSMENU;
     let ex_style = WS_EX_DLGMODALFRAME;
     let (x, y, width, height) = window_frame(owner, dpi, style, ex_style);
 
