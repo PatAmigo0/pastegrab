@@ -57,6 +57,8 @@ The killed job left its `.pastegrab-1` folder in the destination. 8.0 hasn't run
 
 **On the 8.1 VM the launcher rolled back a version that never opened its window on its third start.** A copy of the 0.1.0 build in `app\0.1.1`, staged on trial, ran twice with the trial count at 1 and then 2, because the window confirms only its own version. The third start ran `app\0.1.0` and listed 0.1.1 as rolled back. A version on trial that opened its window cleared the count itself. With the window open, a second start left the count alone and handed its links over, leaving one process. The uninstall entry, which starts the launcher with `--uninstall`, removed the install, the data folder, the shortcut and the entry.
 
+**An install of 0.1.0 on the 8.1 VM updated itself to 0.1.1 from a GitHub pre-release.** Started with `PASTEGRAB_RELEASES` pointing at the release, the window fetched `update.json` and its signature over rustls, through GitHub's redirect to its download host, downloaded the 1.5 MB package, checked its SHA-256 and unpacked it into `app\0.1.1`, staged on trial. The next plain start ran `app\0.1.1\pastegrab-app.exe`, whose version info reads 0.1.1, and its window cleared the trial.
+
 The launcher is 412 KB built with `opt-level = "z"`, against 550 KB at the release profile's level 3.
 
 ## Defender
