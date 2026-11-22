@@ -1,0 +1,19 @@
+[package]
+name = "pgcli"
+version = "0.1.0"
+description = "pastegrab on the command line"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+pastegrab-app = { path = "../../crates/app" }
+pastegrab-cli = { path = "../../crates/cli" }
+pastegrab-domain = { path = "../../crates/domain" }
+pastegrab-ffmpeg = { path = "../../crates/ffmpeg" }
+pastegrab-os = { path = "../../crates/os" }
+pastegrab-ytdlp = { path = "../../crates/ytdlp" }
+
+[lints]
+workspace = true

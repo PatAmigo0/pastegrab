@@ -1,0 +1,15 @@
+[package]
+name = "pastegrab-cli"
+version = "0.1.0"
+description = "View over a terminal"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+pastegrab-app = { path = "../app" }
+pastegrab-domain = { path = "../domain" }
+
+[lints]
+workspace = true
