@@ -282,8 +282,8 @@ A section makes yt-dlp download through ffmpeg, which can't impersonate a browse
 Probe:
 
 ```
-yt-dlp <fixed flags> --no-simulate --skip-download --write-info-json
-       -o "<job>\probe" --print-to-file "<summary template>" "<job>\summary.json"
+yt-dlp <fixed flags> --no-playlist --no-simulate --skip-download --write-info-json
+       -P "<job>" -o probe --print-to-file "<summary template>" summary.json
        -- "<url>"
 ```
 
@@ -293,9 +293,11 @@ Fetch:
 
 ```
 yt-dlp <fixed flags> --load-info-json "<job>\probe.info.json" -f 137+140
-       --merge-output-format mp4 -P "<dest>\.pastegrab\<job id>"
-       -o "%(id)s.%(ext)s" --print-to-file after_move:filepath "<job>\result.txt"
+       --merge-output-format mp4 -P "<dest>\.pastegrab-<job id>"
+       -o "%(id)s.%(ext)s" --print-to-file after_move:filepath result.txt
 ```
+
+Files yt-dlp writes are named relative to `-P`. yt-dlp reads those names as output templates, and a `%` in an absolute path would turn into a field.
 
 yt-dlp never picks the final name. pastegrab moves its file to a name from `output_name` in `domain`: the title without characters Windows forbids, never a reserved name such as `CON` or `NUL`, a length counted in UTF-16 units so the whole path stays under 260, the extension from the profile's container, and a « (2)» suffix instead of replacing a file that exists. A local file converted to its own format gets the suffix too, so the source survives. When the fetch ends, the probe's info JSON is deleted, because with browser login it carries cookies in every format's headers.
 
@@ -453,7 +455,7 @@ Chrome 109, the last version for Windows 8, encrypts cookies with DPAPI, which y
 Everything is per-user, and nothing needs admin rights. A `portable.txt` beside the exe moves the data folder next to it.
 
 - JSON files go to a temp file, get `FlushFileBuffers`, and are swapped in with `MoveFileExW(MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)`. The write-through flag covers the rename only, so the flush comes first. A crash leaves either the old file or the new one. Queue saves follow state transitions and happen at most once per second, while progress never touches the disk. The history in `queue.json` keeps the last 200 finished jobs.
-- yt-dlp works in `<destination>\.pastegrab\<job id>\`. Finishing a file is a rename on the same volume, never a copy, and the finished file gets a `Zone.Identifier` stream with `ZoneId=3`, the mark Windows puts on every download.
+- yt-dlp works in `<destination>\.pastegrab-<job id>\`, which goes away whole once the file is in place. Finishing a file is a rename on the same volume, never a copy, and the finished file gets a `Zone.Identifier` stream with `ZoneId=3`, the mark Windows puts on every download.
 - Before a fetch, free space must cover twice the expected size, because the video part, the audio part and the merged output exist together for a moment.
 - yt-dlp updates run at most daily, in the background after startup, and right away after `EngineOutdated`. The updater downloads the release's `yt-dlp` file, 3 MB of pure Python with yt-dlp-ejs inside, and `SHA2-256SUMS`. It checks the hash, unpacks into a new version folder with zip-slip checks, compiles the bytecode with the bundled Python, runs `--version` from the new folder, and only then switches `state.json`. A release that needs a newer Python fails that check and never goes live. Running jobs finish on the old folder, and the next start deletes it. A nightly channel setting covers weeks when YouTube moves faster than stable releases.
 - Python, ffmpeg and QuickJS are pinned and ship with app releases. Python is python-build-standalone's 3.11 install, pruned of Tcl/Tk, IDLE, pip, ensurepip, the test suite and the headers, which takes it from 95 MB to about 50 with yt-dlp's wheels. M0 loaded every `.dll` and `.pyd` in it on 8.0 and 8.1.
