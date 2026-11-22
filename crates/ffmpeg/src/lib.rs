@@ -27,6 +27,8 @@ pub struct Tools {
     pub ffmpeg: PathBuf,
     /// The ffprobe executable.
     pub ffprobe: PathBuf,
+    /// The x264 preset encodes use, such as `veryfast`; setup picks it for the CPU.
+    pub x264_preset: &'static str,
 }
 
 /// ffprobe and ffmpeg behind the ports; clones share one configuration.
@@ -108,7 +110,12 @@ impl Transcoder for Ffmpeg {
             .or_else(|| duration.map(|secs| Duration::from_secs(secs.into())))
             .map(|length| u64::try_from(length.as_micros()).unwrap_or(u64::MAX));
         let ffmpeg = &self.0.tools.ffmpeg;
-        let mut lines = self.spawn(ffmpeg, args::convert(input, output, convert), true, cancel)?;
+        let mut lines = self.spawn(
+            ffmpeg,
+            args::convert(input, output, convert, self.0.tools.x264_preset),
+            true,
+            cancel,
+        )?;
         let mut buf = Vec::with_capacity(128);
         let mut tail = Tail::default();
         while lines.next_line(&mut buf).map_err(pipe_failure)? {

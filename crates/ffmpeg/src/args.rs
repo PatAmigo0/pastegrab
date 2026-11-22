@@ -23,7 +23,12 @@ pub(crate) fn probe(file: &Path) -> Vec<OsString> {
     args
 }
 
-pub(crate) fn convert(input: &Path, output: &Path, convert: &Convert) -> Vec<OsString> {
+pub(crate) fn convert(
+    input: &Path,
+    output: &Path,
+    convert: &Convert,
+    preset: &str,
+) -> Vec<OsString> {
     let mut args = Args::default();
     args.flags(&["-hide_banner", "-nostdin", "-nostats", "-y"])
         .pair("-loglevel", "error")
@@ -42,7 +47,8 @@ pub(crate) fn convert(input: &Path, output: &Path, convert: &Convert) -> Vec<OsS
         VideoAction::Encode(encode) => {
             args.pair("-map", "0:V:0")
                 .pair("-c:v", "libx264")
-                .flags(&["-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p"]);
+                .pair("-preset", preset)
+                .flags(&["-crf", "23", "-pix_fmt", "yuv420p"]);
             if encode.deinterlace {
                 args.pair("-vf", "bwdif=mode=send_field");
             }
@@ -118,7 +124,11 @@ mod tests {
     use super::convert;
 
     fn line(c: &Convert) -> String {
-        let args = convert(Path::new("/w/in.mkv"), Path::new("/w/out.mp4"), c);
+        line_at(c, "veryfast")
+    }
+
+    fn line_at(c: &Convert, preset: &str) -> String {
+        let args = convert(Path::new("/w/in.mkv"), Path::new("/w/out.mp4"), c, preset);
         let text: Vec<String> = args
             .iter()
             .map(|a| a.to_string_lossy().into_owned())
@@ -170,6 +180,21 @@ mod tests {
                  file:/w/out.mp4"
             )
         );
+    }
+
+    #[test]
+    fn an_encode_takes_the_preset_setup_picked() {
+        let encode = Convert {
+            container: Container::Mp4,
+            video: VideoAction::Encode(VideoEncode {
+                codec: VideoCodec::H264,
+                deinterlace: false,
+                keyframe_every_second: false,
+            }),
+            audio: AudioAction::Copy,
+            trim: None,
+        };
+        assert!(line_at(&encode, "superfast").contains(" -preset superfast -crf 23 "));
     }
 
     #[test]

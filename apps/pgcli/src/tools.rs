@@ -31,6 +31,7 @@ fn adapters(s: Sidecars, cache: PathBuf, temp: PathBuf) -> (Engine, Tools) {
     let tools = Tools {
         ffmpeg: s.ffmpeg,
         ffprobe: s.ffprobe,
+        x264_preset: pastegrab_deploy::machine::Tuning::default().preset.name(),
     };
     (engine, tools)
 }
