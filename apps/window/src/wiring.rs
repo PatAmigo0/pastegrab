@@ -64,7 +64,7 @@ fn start() -> Result<(), String> {
         x264_preset: tuning.preset.name(),
     };
     let runner: Arc<dyn ProcessRunner> = Arc::new(LocalRunner::new());
-    let ytdlp = YtDlp::new(Arc::clone(&runner), engine);
+    let ytdlp = YtDlp::with_direct(Arc::clone(&runner), engine, Arc::new(Direct::default()));
     let ffmpeg = Ffmpeg::new(runner, tools);
     let settings = JsonSettings::new(data.join("settings.json"));
     let choices = settings.load().unwrap_or_default();

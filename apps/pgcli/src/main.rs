@@ -121,7 +121,7 @@ fn run() -> Result<ExitCode, String> {
     let cache = data.join("cache").join("yt-dlp");
     let (engine, tools) = tools::find(options.tools.as_deref(), cache, temp)?;
     let runner: Arc<dyn ProcessRunner> = Arc::new(LocalRunner::new());
-    let ytdlp = YtDlp::new(Arc::clone(&runner), engine);
+    let ytdlp = YtDlp::with_direct(Arc::clone(&runner), engine, Arc::new(Direct::default()));
     let ffmpeg = Ffmpeg::new(runner, tools);
     let machine = Machine {
         screen_height: options.screen_height,
