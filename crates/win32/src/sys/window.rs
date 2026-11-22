@@ -12,8 +12,8 @@ use pastegrab_domain::profile::ProfileKind;
 use pastegrab_i18n::RU;
 use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
-    COLOR_BTNFACE, CreateFontIndirectW, DeleteObject, FW_SEMIBOLD, GetDC, GetDeviceCaps,
-    GetSysColorBrush, HFONT, LOGPIXELSY, ReleaseDC, UpdateWindow,
+    COLOR_BTNFACE, CreateFontIndirectW, DeleteObject, FW_SEMIBOLD, GetSysColorBrush, HFONT,
+    UpdateWindow,
 };
 use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -55,12 +55,13 @@ use windows::Win32::UI::Controls::{
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VK_CONTROL};
 use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, DestroyMenu, GetCursorPos, GetDlgCtrlID, HMENU as MENU,
-    MF_GRAYED, MF_SEPARATOR, MF_STRING, PostMessageW, TPM_RETURNCMD, TPM_RIGHTBUTTON,
-    TrackPopupMenu, WA_INACTIVE, WM_ACTIVATE, WM_APP, WM_CONTEXTMENU, WM_COPYDATA, WM_KEYDOWN,
-    WM_TIMER,
+    MF_GRAYED, MF_SEPARATOR, MF_STRING, PostMessageW, SWP_NOACTIVATE, SWP_NOZORDER, SetWindowPos,
+    TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, WA_INACTIVE, WM_ACTIVATE, WM_APP,
+    WM_CONTEXTMENU, WM_COPYDATA, WM_DPICHANGED, WM_KEYDOWN, WM_TIMER,
 };
 
 use super::bridge::{WM_CORE, WinView};
+use super::dpi::{self, scale};
 use super::fade::{self, Fade};
 use super::instance::FORWARD;
 use super::rows;
@@ -141,7 +142,8 @@ pub fn run(
     if unsafe { RegisterClassExW(&raw const wc) } == 0 {
         return Err("RegisterClassExW failed".into());
     }
-    let dpi = system_dpi();
+    dpi::enable();
+    let dpi = dpi::for_primary();
     let ui = Box::into_raw(Box::new(Ui::new(core, view, startup, dpi)));
     let title = HSTRING::from(RU.window_title);
     // SAFETY: `ui` stays alive until WM_NCDESTROY takes it back; the strings outlive the call.
@@ -336,8 +338,8 @@ struct Ui {
     dest: RefCell<PathBuf>,
     startup: RefCell<Option<String>>,
     controls: OnceCell<Controls>,
-    fonts: OnceCell<Fonts>,
-    dpi: i32,
+    fonts: RefCell<Option<Fonts>>,
+    dpi: Cell<i32>,
     card: Cell<Card>,
     notice: Cell<&'static str>,
     link_len: Cell<usize>,
@@ -356,8 +358,8 @@ impl Ui {
             dest: RefCell::new(startup.dest),
             startup: RefCell::new(Some(startup.text).filter(|text| !text.trim().is_empty())),
             controls: OnceCell::new(),
-            fonts: OnceCell::new(),
-            dpi,
+            fonts: RefCell::new(None),
+            dpi: Cell::new(dpi),
             card: Cell::new(Card::Hidden),
             notice: Cell::new(""),
             link_len: Cell::new(0),
@@ -372,11 +374,13 @@ impl Ui {
         match msg {
             WM_CREATE => self.create(hwnd),
             WM_SIZE => self.layout(hwnd),
+            WM_DPICHANGED => self.dpi_changed(hwnd, wparam, lparam),
             WM_GETMINMAXINFO => {
                 // SAFETY: WM_GETMINMAXINFO's lparam points to a MINMAXINFO for this call.
                 let info = unsafe { &mut *(lparam.0 as *mut MINMAXINFO) };
-                info.ptMinTrackSize.x = scale(600, self.dpi);
-                info.ptMinTrackSize.y = scale(420, self.dpi);
+                let dpi = self.dpi.get();
+                info.ptMinTrackSize.x = scale(600, dpi);
+                info.ptMinTrackSize.y = scale(420, dpi);
             }
             WM_COMMAND => self.command(hwnd, low(wparam.0), high(wparam.0)),
             WM_NOTIFY => return self.notify(lparam),
@@ -439,33 +443,21 @@ impl Ui {
     }
 
     fn create(&self, hwnd: HWND) {
-        let fonts = fonts(self.dpi);
-        let (normal, bold) = (fonts.normal, fonts.bold);
-        let _ = self.fonts.set(fonts);
+        let dpi = dpi::for_window(hwnd);
+        self.dpi.set(dpi);
         let controls = Controls::new(hwnd);
-        for control in [
-            controls.link,
-            controls.analyze,
-            controls.detail,
-            controls.profile,
-            controls.download,
-            controls.list,
-            controls.folder,
-            controls.change,
-            controls.clear,
-        ] {
-            set_font(control, normal);
-        }
+        let _ = self.controls.set(controls);
+        let next_fonts = fonts(dpi);
+        self.apply_fonts(next_fonts.normal, next_fonts.bold);
+        let _ = self.fonts.replace(Some(next_fonts));
         enable(controls.clear, false);
-        set_font(controls.title, bold);
         cue_banner(controls.link, RU.paste_hint);
         set_list_style(controls.list, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
-        insert_column(controls.list, 0, RU.columns.title, scale(360, self.dpi));
-        insert_column(controls.list, 1, RU.columns.state, scale(330, self.dpi));
+        insert_column(controls.list, 0, RU.columns.title, scale(360, dpi));
+        insert_column(controls.list, 1, RU.columns.state, scale(330, dpi));
         for name in RU.profiles {
             combo_add(controls.profile, name);
         }
-        let _ = self.controls.set(controls);
         self.show_folder();
         self.refresh_card(hwnd);
         self.view.attach(hwnd);
@@ -475,9 +467,46 @@ impl Ui {
         }
     }
 
+    fn apply_fonts(&self, normal: HFONT, bold: HFONT) {
+        let c = self.controls();
+        for control in [
+            c.link, c.analyze, c.detail, c.profile, c.download, c.list, c.folder, c.change, c.clear,
+        ] {
+            set_font(control, normal);
+        }
+        set_font(c.title, bold);
+    }
+
+    fn dpi_changed(&self, hwnd: HWND, wparam: WPARAM, lparam: LPARAM) {
+        let next = i32::try_from(high(wparam.0)).unwrap_or(0);
+        if next <= 0 {
+            return;
+        }
+        self.dpi.set(next);
+        let next_fonts = fonts(next);
+        self.apply_fonts(next_fonts.normal, next_fonts.bold);
+        let _old = self.fonts.replace(Some(next_fonts));
+        // SAFETY: WM_DPICHANGED's lparam points to Windows' suggested RECT for this call.
+        let rect = unsafe { &*(lparam.0 as *const RECT) };
+        // SAFETY: `hwnd` belongs to this thread.
+        unsafe {
+            let _ = SetWindowPos(
+                hwnd,
+                None,
+                rect.left,
+                rect.top,
+                rect.right - rect.left,
+                rect.bottom - rect.top,
+                SWP_NOZORDER | SWP_NOACTIVATE,
+            );
+        }
+        self.layout(hwnd);
+    }
+
     fn layout(&self, hwnd: HWND) {
         let c = self.controls();
-        let px = |v: i32| scale(v, self.dpi);
+        let dpi = self.dpi.get();
+        let px = |v: i32| scale(v, dpi);
         let mut client = RECT::default();
         // SAFETY: `client` outlives the call.
         let _ = unsafe { GetClientRect(hwnd, &raw mut client) };
@@ -612,7 +641,12 @@ impl Ui {
                 // SAFETY: a report list view's NM_CUSTOMDRAW comes with an NMLVCUSTOMDRAW.
                 let draw = unsafe { &mut *(lparam.0 as *mut NMLVCUSTOMDRAW) };
                 let board = self.board.borrow();
-                return Some(rows::paint(header.hwndFrom, draw, board.rows(), self.dpi));
+                return Some(rows::paint(
+                    header.hwndFrom,
+                    draw,
+                    board.rows(),
+                    self.dpi.get(),
+                ));
             }
             LVN_ITEMACTIVATE => {
                 // SAFETY: LVN_ITEMACTIVATE comes with an NMITEMACTIVATE.
@@ -916,20 +950,6 @@ fn fonts(dpi: i32) -> Fonts {
             bold: CreateFontIndirectW(&raw const heavy),
         }
     }
-}
-
-fn system_dpi() -> i32 {
-    // SAFETY: the screen's device context is released right after the query.
-    unsafe {
-        let dc = GetDC(None);
-        let dpi = GetDeviceCaps(Some(dc), LOGPIXELSY);
-        ReleaseDC(None, dc);
-        if dpi > 0 { dpi } else { 96 }
-    }
-}
-
-pub(super) const fn scale(value: i32, dpi: i32) -> i32 {
-    value * dpi / 96
 }
 
 fn size_u32<T>() -> u32 {

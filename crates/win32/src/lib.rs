@@ -11,6 +11,6 @@ mod sys;
 
 #[cfg(windows)]
 pub use sys::{
-    Instance, Startup, WinView, alert, ask, claim, inform, run, screen_height, videos_folder,
-    window_open,
+    Instance, Startup, WinView, alert, ask, claim, enable_dpi, inform, run, screen_height,
+    videos_folder, window_open,
 };

@@ -22,6 +22,7 @@ use pastegrab_ytdlp::{Engine, YtDlp};
 
 pub fn run() -> ExitCode {
     let _ = pastegrab_os::harden_dll_search();
+    pastegrab_win32::enable_dpi();
     if env::args_os()
         .nth(1)
         .is_some_and(|arg| arg == "--uninstall")

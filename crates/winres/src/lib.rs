@@ -106,11 +106,17 @@ fn manifest_xml(kind: Kind) -> String {
     } else {
         ""
     };
-    let window = if kind == Kind::Console {
+    let controls = if kind == Kind::Console {
         ""
     } else {
-        r#"<dependency><dependentAssembly><assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls" version="6.0.0.0" processorArchitecture="*" publicKeyToken="6595b64144ccf1df" language="*"/></dependentAssembly></dependency>
+        r#"<dependency><dependentAssembly><assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls" version="6.0.0.0" processorArchitecture="*" publicKeyToken="6595b64144ccf1df" language="*"/></dependentAssembly></dependency>"#
+    };
+    // The window sets per-monitor DPI at runtime; a manifest entry would lock it to system DPI.
+    let dpi = if kind == Kind::Setup {
+        r#"
   <application xmlns="urn:schemas-microsoft-com:asm.v3"><windowsSettings><dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true</dpiAware></windowsSettings></application>"#
+    } else {
+        ""
     };
     format!(
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -121,11 +127,34 @@ fn manifest_xml(kind: Kind) -> String {
     <supportedOS Id="{{1f676c76-80e1-4239-95bb-83d0f6d0da78}}"/>
     <supportedOS Id="{{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}}"/>
   </application></compatibility>
-  {window}
+  {controls}{dpi}
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3"><security><requestedPrivileges>
     <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
   </requestedPrivileges></security></trustInfo>
 </assembly>
 "#
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Kind, manifest_xml};
+
+    #[test]
+    fn each_manifest_carries_only_what_its_kind_needs() {
+        let window = manifest_xml(Kind::Window);
+        assert!(window.contains("Common-Controls"));
+        assert!(window.contains("4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38"));
+        assert!(!window.contains("dpiAware"));
+        assert!(!window.contains("35138b9a-5d96-4fbd-8e2d-a2440225f93a"));
+
+        let setup = manifest_xml(Kind::Setup);
+        assert!(setup.contains("Common-Controls"));
+        assert!(setup.contains("dpiAware"));
+        assert!(setup.contains("35138b9a-5d96-4fbd-8e2d-a2440225f93a"));
+
+        let console = manifest_xml(Kind::Console);
+        assert!(!console.contains("Common-Controls"));
+        assert!(!console.contains("dpiAware"));
+    }
 }

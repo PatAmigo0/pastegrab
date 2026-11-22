@@ -25,7 +25,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::w;
 
-use super::window::scale;
+use super::dpi::scale;
 use crate::text;
 
 const STATE_COLUMN: i32 = 1;
