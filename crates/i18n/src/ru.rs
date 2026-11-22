@@ -1,4 +1,6 @@
-use crate::{Columns, Failures, Menu, NoPlan, Notices, Report, Setup, States, Strings, Uninstall};
+use crate::{
+    Columns, Failures, Menu, NoPlan, Notices, Report, RowActions, Setup, States, Strings, Uninstall,
+};
 
 const KB: u64 = 1000;
 const MB: u64 = 1000 * KB;
@@ -21,6 +23,10 @@ pub const RU: Strings = Strings {
         show_in_folder: "Показать в папке",
         retry: "Повторить",
         cancel: "Отменить",
+    },
+    row_actions: RowActions {
+        open: "Открыть",
+        folder: "Папка",
     },
     no_links: "В тексте нет ссылки",
     profiles: [

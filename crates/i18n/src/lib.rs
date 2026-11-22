@@ -26,6 +26,8 @@ pub struct Strings {
     pub columns: Columns,
     /// The job list's right-click menu.
     pub menu: Menu,
+    /// Inline buttons on a finished row.
+    pub row_actions: RowActions,
     /// A paste without a link.
     pub no_links: &'static str,
     /// Profile names, in the format list's order.
@@ -172,6 +174,15 @@ pub struct Menu {
     pub retry: &'static str,
     /// Stops a job.
     pub cancel: &'static str,
+}
+
+/// Inline buttons on a finished row.
+#[derive(Debug)]
+pub struct RowActions {
+    /// Opens the finished file.
+    pub open: &'static str,
+    /// Opens the folder with the file selected.
+    pub folder: &'static str,
 }
 
 /// A job's state as one word or two.
