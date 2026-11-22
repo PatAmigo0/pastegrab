@@ -48,7 +48,10 @@ use windows::core::{HSTRING, PCWSTR, PWSTR, w};
 
 use windows::Win32::Foundation::POINT;
 use windows::Win32::System::DataExchange::COPYDATASTRUCT;
-use windows::Win32::UI::Controls::{NM_CUSTOMDRAW, NMLVCUSTOMDRAW};
+use windows::Win32::UI::Controls::{
+    LIST_VIEW_ITEM_STATE_FLAGS, LVIS_FOCUSED, LVIS_SELECTED, LVITEMW, LVM_SETITEMSTATE,
+    NM_CUSTOMDRAW, NMLVCUSTOMDRAW,
+};
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VK_CONTROL};
 use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, DestroyMenu, GetCursorPos, GetDlgCtrlID, HMENU as MENU,
@@ -84,6 +87,7 @@ const ID_DOWNLOAD: i32 = 106;
 const ID_LIST: i32 = 107;
 const ID_FOLDER: i32 = 108;
 const ID_CHANGE: i32 = 109;
+const ID_CLEAR: i32 = 110;
 
 /// What the window starts with.
 #[derive(Debug, Clone)]
@@ -218,6 +222,87 @@ struct Controls {
     list: HWND,
     folder: HWND,
     change: HWND,
+    clear: HWND,
+}
+
+impl Controls {
+    /// Every child control of the window; `layout` places them.
+    fn new(hwnd: HWND) -> Self {
+        let tab = WS_TABSTOP.0;
+        let label = SS_NOPREFIX.0 | SS_ENDELLIPSIS.0;
+        Self {
+            link: child(
+                hwnd,
+                w!("EDIT"),
+                "",
+                tab | ES_AUTOHSCROLL as u32,
+                true,
+                ID_LINK,
+            ),
+            analyze: child(
+                hwnd,
+                w!("BUTTON"),
+                RU.analyze,
+                tab | BS_PUSHBUTTON as u32,
+                false,
+                ID_ANALYZE,
+            ),
+            title: child(hwnd, w!("STATIC"), "", label, false, ID_TITLE),
+            detail: child(hwnd, w!("STATIC"), "", label, false, ID_DETAIL),
+            profile: child(
+                hwnd,
+                w!("COMBOBOX"),
+                "",
+                tab | CBS_DROPDOWNLIST as u32 | WS_VSCROLL.0,
+                false,
+                ID_PROFILE,
+            ),
+            download: child(
+                hwnd,
+                w!("BUTTON"),
+                RU.download,
+                tab | BS_DEFPUSHBUTTON as u32,
+                false,
+                ID_DOWNLOAD,
+            ),
+            list: child(
+                hwnd,
+                WC_LISTVIEWW,
+                "",
+                tab | LVS_REPORT
+                    | LVS_OWNERDATA
+                    | LVS_SINGLESEL
+                    | LVS_SHOWSELALWAYS
+                    | LVS_NOSORTHEADER,
+                true,
+                ID_LIST,
+            ),
+            folder: child(
+                hwnd,
+                w!("STATIC"),
+                "",
+                SS_NOPREFIX.0 | SS_PATHELLIPSIS.0 | SS_CENTERIMAGE.0,
+                false,
+                ID_FOLDER,
+            ),
+            change: child(
+                hwnd,
+                w!("BUTTON"),
+                RU.change_folder,
+                tab | BS_PUSHBUTTON as u32,
+                false,
+                ID_CHANGE,
+            ),
+            clear: child(
+                hwnd,
+                w!("BUTTON"),
+                RU.clear,
+                tab | BS_PUSHBUTTON as u32,
+                false,
+                ID_CLEAR,
+            ),
+        }
+    }
 }
 
 struct Fonts {
@@ -349,6 +434,7 @@ impl Ui {
             list: HWND::default(),
             folder: HWND::default(),
             change: HWND::default(),
+            clear: HWND::default(),
         })
     }
 
@@ -356,72 +442,7 @@ impl Ui {
         let fonts = fonts(self.dpi);
         let (normal, bold) = (fonts.normal, fonts.bold);
         let _ = self.fonts.set(fonts);
-        let tab = WS_TABSTOP.0;
-        let label = SS_NOPREFIX.0 | SS_ENDELLIPSIS.0;
-        let controls = Controls {
-            link: child(
-                hwnd,
-                w!("EDIT"),
-                "",
-                tab | ES_AUTOHSCROLL as u32,
-                true,
-                ID_LINK,
-            ),
-            analyze: child(
-                hwnd,
-                w!("BUTTON"),
-                RU.analyze,
-                tab | BS_PUSHBUTTON as u32,
-                false,
-                ID_ANALYZE,
-            ),
-            title: child(hwnd, w!("STATIC"), "", label, false, ID_TITLE),
-            detail: child(hwnd, w!("STATIC"), "", label, false, ID_DETAIL),
-            profile: child(
-                hwnd,
-                w!("COMBOBOX"),
-                "",
-                tab | CBS_DROPDOWNLIST as u32 | WS_VSCROLL.0,
-                false,
-                ID_PROFILE,
-            ),
-            download: child(
-                hwnd,
-                w!("BUTTON"),
-                RU.download,
-                tab | BS_DEFPUSHBUTTON as u32,
-                false,
-                ID_DOWNLOAD,
-            ),
-            list: child(
-                hwnd,
-                WC_LISTVIEWW,
-                "",
-                tab | LVS_REPORT
-                    | LVS_OWNERDATA
-                    | LVS_SINGLESEL
-                    | LVS_SHOWSELALWAYS
-                    | LVS_NOSORTHEADER,
-                true,
-                ID_LIST,
-            ),
-            folder: child(
-                hwnd,
-                w!("STATIC"),
-                "",
-                SS_NOPREFIX.0 | SS_PATHELLIPSIS.0 | SS_CENTERIMAGE.0,
-                false,
-                ID_FOLDER,
-            ),
-            change: child(
-                hwnd,
-                w!("BUTTON"),
-                RU.change_folder,
-                tab | BS_PUSHBUTTON as u32,
-                false,
-                ID_CHANGE,
-            ),
-        };
+        let controls = Controls::new(hwnd);
         for control in [
             controls.link,
             controls.analyze,
@@ -431,9 +452,11 @@ impl Ui {
             controls.list,
             controls.folder,
             controls.change,
+            controls.clear,
         ] {
             set_font(control, normal);
         }
+        enable(controls.clear, false);
         set_font(controls.title, bold);
         cue_banner(controls.link, RU.paste_hint);
         set_list_style(controls.list, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
@@ -497,11 +520,12 @@ impl Ui {
         let state_width = px(330).max(list_width / 2);
         set_column_width(c.list, 0, list_width - state_width - scrollbar - px(4));
         set_column_width(c.list, 1, state_width);
+        place(c.clear, margin, bottom, wide, tall);
         place(
             c.folder,
-            margin,
+            margin + wide + px(12),
             bottom,
-            width - 2 * margin - gap - button,
+            width - 2 * margin - 2 * gap - button - wide,
             tall,
         );
         place(c.change, width - margin - button, bottom, button, tall);
@@ -548,6 +572,7 @@ impl Ui {
                 }
                 let _ = self.core.send(Input::DefaultProfile(profile));
             }
+            (ID_CLEAR, BN_CLICKED) => self.clear_ended(),
             (ID_CHANGE, BN_CLICKED) => {
                 let start = self.dest.borrow().clone();
                 if let Some(folder) = shell::pick_folder(hwnd, &start) {
@@ -703,8 +728,25 @@ impl Ui {
             self.refresh_card(hwnd);
             self.layout(hwnd);
         }
-        let activity = self.board.borrow().activity();
+        let (activity, ended) = {
+            let board = self.board.borrow();
+            (board.activity(), board.has_ended())
+        };
         self.taskbar.show(hwnd, activity);
+        enable(self.controls().clear, ended);
+    }
+
+    /// Drops the rows that ended; rows that run or wait stay.
+    fn clear_ended(&self) {
+        let c = self.controls();
+        let count = {
+            let mut board = self.board.borrow_mut();
+            board.clear_ended();
+            board.rows().len()
+        };
+        deselect_all(c.list);
+        set_item_count(c.list, count);
+        enable(c.clear, false);
     }
 
     fn refresh_card(&self, hwnd: HWND) {
@@ -1039,6 +1081,23 @@ fn set_column_width(list: HWND, index: usize, width: i32) {
             LVM_SETCOLUMNWIDTH,
             Some(WPARAM(index)),
             Some(LPARAM(width.max(0) as isize)),
+        )
+    };
+}
+
+/// Clears the selection, whose indices would point at other rows once some are gone.
+fn deselect_all(list: HWND) {
+    let item = LVITEMW {
+        stateMask: LIST_VIEW_ITEM_STATE_FLAGS(LVIS_SELECTED.0 | LVIS_FOCUSED.0),
+        ..Default::default()
+    };
+    // SAFETY: `item` outlives the synchronous message; -1 means every item.
+    unsafe {
+        SendMessageW(
+            list,
+            LVM_SETITEMSTATE,
+            Some(WPARAM(usize::MAX)),
+            Some(LPARAM(std::ptr::from_ref(&item) as isize)),
         )
     };
 }
