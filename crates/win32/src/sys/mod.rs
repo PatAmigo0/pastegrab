@@ -4,6 +4,7 @@
 
 mod bridge;
 mod instance;
+mod rows;
 mod shell;
 mod taskbar;
 mod tray;

@@ -48,6 +48,7 @@ use windows::core::{HSTRING, PCWSTR, PWSTR, w};
 
 use windows::Win32::Foundation::POINT;
 use windows::Win32::System::DataExchange::COPYDATASTRUCT;
+use windows::Win32::UI::Controls::{NM_CUSTOMDRAW, NMLVCUSTOMDRAW};
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VK_CONTROL};
 use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, DestroyMenu, GetCursorPos, GetDlgCtrlID, HMENU as MENU,
@@ -57,6 +58,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 use super::bridge::{WM_CORE, WinView};
 use super::instance::FORWARD;
+use super::rows;
 use super::shell;
 use super::taskbar::Taskbar;
 use super::tray::{Tray, WM_TRAY};
@@ -566,6 +568,12 @@ impl Ui {
                     fill(info.item.pszText, info.item.cchTextMax, &text);
                 }
             }
+            NM_CUSTOMDRAW => {
+                // SAFETY: a report list view's NM_CUSTOMDRAW comes with an NMLVCUSTOMDRAW.
+                let draw = unsafe { &mut *(lparam.0 as *mut NMLVCUSTOMDRAW) };
+                let board = self.board.borrow();
+                return Some(rows::paint(header.hwndFrom, draw, board.rows(), self.dpi));
+            }
             LVN_ITEMACTIVATE => {
                 // SAFETY: LVN_ITEMACTIVATE comes with an NMITEMACTIVATE.
                 let item = unsafe { &*(lparam.0 as *const NMITEMACTIVATE) };
@@ -854,7 +862,7 @@ fn system_dpi() -> i32 {
     }
 }
 
-const fn scale(value: i32, dpi: i32) -> i32 {
+pub(super) const fn scale(value: i32, dpi: i32) -> i32 {
     value * dpi / 96
 }
 
