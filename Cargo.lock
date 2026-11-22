@@ -597,23 +597,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
-name = "pastegrab"
-version = "0.1.0"
-dependencies = [
- "pastegrab-app",
- "pastegrab-deploy",
- "pastegrab-domain",
- "pastegrab-ffmpeg",
- "pastegrab-http",
- "pastegrab-i18n",
- "pastegrab-os",
- "pastegrab-store",
- "pastegrab-win32",
- "pastegrab-winres",
- "pastegrab-ytdlp",
-]
-
-[[package]]
 name = "pastegrab-app"
 version = "0.1.0"
 dependencies = [
@@ -633,7 +616,9 @@ dependencies = [
 name = "pastegrab-deploy"
 version = "0.1.0"
 dependencies = [
+ "pastegrab-update",
  "ruzstd",
+ "serde_json",
  "tar",
  "windows",
 ]
@@ -672,6 +657,17 @@ dependencies = [
 [[package]]
 name = "pastegrab-i18n"
 version = "0.1.0"
+
+[[package]]
+name = "pastegrab-launcher"
+version = "0.1.0"
+dependencies = [
+ "pastegrab-deploy",
+ "pastegrab-i18n",
+ "pastegrab-update",
+ "pastegrab-winres",
+ "windows",
+]
 
 [[package]]
 name = "pastegrab-os"
@@ -739,6 +735,24 @@ dependencies = [
  "pastegrab-domain",
  "pastegrab-i18n",
  "windows",
+]
+
+[[package]]
+name = "pastegrab-window"
+version = "0.1.0"
+dependencies = [
+ "pastegrab-app",
+ "pastegrab-deploy",
+ "pastegrab-domain",
+ "pastegrab-ffmpeg",
+ "pastegrab-http",
+ "pastegrab-i18n",
+ "pastegrab-os",
+ "pastegrab-store",
+ "pastegrab-update",
+ "pastegrab-win32",
+ "pastegrab-winres",
+ "pastegrab-ytdlp",
 ]
 
 [[package]]

@@ -1,0 +1,29 @@
+[package]
+name = "pastegrab-launcher"
+version = "0.1.0"
+description = "pastegrab.exe: starts the installed version and rolls back one that never opens"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "pastegrab"
+path = "src/main.rs"
+
+[dependencies]
+pastegrab-deploy = { path = "../../crates/deploy" }
+pastegrab-update = { path = "../../crates/update" }
+
+[target.'cfg(windows)'.dependencies]
+pastegrab-i18n = { path = "../../crates/i18n" }
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[build-dependencies]
+pastegrab-winres = { path = "../../crates/winres" }
+
+[lints]
+workspace = true
