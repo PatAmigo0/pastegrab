@@ -9,7 +9,9 @@ lab=$(cd "$(dirname "$0")" && pwd)
 "$lab/guest-run" "$vm" "$(cat <<PS
 \$action = New-ScheduledTaskAction -Execute '$program' $( [ -n "$arguments" ] && printf -- "-Argument '%s'" "$arguments" )
 \$who = New-ScheduledTaskPrincipal -UserId tester -LogonType Interactive
-Register-ScheduledTask -TaskName pastegrab-gui -Action \$action -Principal \$who -Force | Out-Null
+# A second start while the first program still runs would be ignored otherwise.
+\$settings = New-ScheduledTaskSettingsSet -MultipleInstances Parallel
+Register-ScheduledTask -TaskName pastegrab-gui -Action \$action -Principal \$who -Settings \$settings -Force | Out-Null
 Start-ScheduledTask -TaskName pastegrab-gui
 PS
 )" >/dev/null

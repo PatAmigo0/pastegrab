@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# click VM X Y [WIDTH HEIGHT]: left-clicks screen pixel X,Y in a lab VM through its USB tablet,
-# which maps 0..32767 onto the whole screen; the size defaults to 1024x768.
+# click VM X Y [WIDTH HEIGHT]: clicks screen pixel X,Y in a lab VM through its USB tablet, which
+# maps 0..32767 onto the whole screen; the size defaults to 1024x768. CLICK_BUTTON=right right-clicks.
 # needs: virsh
 set -euo pipefail
 vm=$1 x=$2 y=$3 width=${4:-1024} height=${5:-768}
 qmp() { virsh -c qemu:///system qemu-monitor-command "$vm" "$1" >/dev/null; }
 event() { printf '{"execute":"input-send-event","arguments":{"events":[%s]}}' "$1"; }
 qmp "$(event "{\"type\":\"abs\",\"data\":{\"axis\":\"x\",\"value\":$((x * 32767 / width))}},{\"type\":\"abs\",\"data\":{\"axis\":\"y\",\"value\":$((y * 32767 / height))}}")"
-qmp "$(event '{"type":"btn","data":{"down":true,"button":"left"}}')"
-qmp "$(event '{"type":"btn","data":{"down":false,"button":"left"}}')"
+button=${CLICK_BUTTON:-left}
+qmp "$(event "{\"type\":\"btn\",\"data\":{\"down\":true,\"button\":\"$button\"}}")"
+qmp "$(event "{\"type\":\"btn\",\"data\":{\"down\":false,\"button\":\"$button\"}}")"
