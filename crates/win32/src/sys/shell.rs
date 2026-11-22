@@ -14,7 +14,8 @@ use windows::Win32::UI::Shell::{
     SHGetKnownFolderPath, SIGDN_FILESYSPATH, ShellExecuteW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetSystemMetrics, MB_ICONERROR, MB_OK, MessageBoxW, SM_CYSCREEN, SW_SHOWNORMAL,
+    GetSystemMetrics, IDYES, MB_ICONERROR, MB_ICONINFORMATION, MB_ICONQUESTION, MB_OK, MB_YESNO,
+    MESSAGEBOX_STYLE, MessageBoxW, SM_CYSCREEN, SW_SHOWNORMAL,
 };
 use windows::core::{HSTRING, PCWSTR, PWSTR, w};
 
@@ -35,9 +36,24 @@ pub fn screen_height() -> u32 {
 
 /// A message box for a problem that leaves no window to show it in.
 pub fn alert(text: &str) {
-    let (text, title) = (HSTRING::from(text), HSTRING::from(RU.window_title));
+    message_box(RU.window_title, text, MB_OK | MB_ICONERROR);
+}
+
+/// A yes-or-no question in a message box of its own; `true` for yes.
+#[must_use]
+pub fn ask(title: &str, text: &str) -> bool {
+    message_box(title, text, MB_YESNO | MB_ICONQUESTION) == IDYES.0
+}
+
+/// News in a message box of its own.
+pub fn inform(title: &str, text: &str) {
+    message_box(title, text, MB_OK | MB_ICONINFORMATION);
+}
+
+fn message_box(title: &str, text: &str, style: MESSAGEBOX_STYLE) -> i32 {
+    let (text, title) = (HSTRING::from(text), HSTRING::from(title));
     // SAFETY: both strings outlive the call.
-    unsafe { MessageBoxW(None, &text, &title, MB_OK | MB_ICONERROR) };
+    unsafe { MessageBoxW(None, &text, &title, style) }.0
 }
 
 /// Opens a file or folder the way Explorer would.

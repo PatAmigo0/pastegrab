@@ -19,6 +19,13 @@ pub struct Instance {
     _mutex: Option<OwnedHandle>,
 }
 
+/// Whether this user's pastegrab window is open.
+#[must_use]
+pub fn window_open() -> bool {
+    // SAFETY: a lookup by class name; the handle is not kept.
+    unsafe { FindWindowW(CLASS, PCWSTR::null()) }.is_ok()
+}
+
 /// Claims the one window per user. When another already runs, it gets `text`, comes to the
 /// front, and the result is `None`.
 #[must_use]

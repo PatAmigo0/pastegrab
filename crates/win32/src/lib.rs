@@ -8,4 +8,7 @@ mod text;
 mod sys;
 
 #[cfg(windows)]
-pub use sys::{Instance, Startup, WinView, alert, claim, run, screen_height, videos_folder};
+pub use sys::{
+    Instance, Startup, WinView, alert, ask, claim, inform, run, screen_height, videos_folder,
+    window_open,
+};
