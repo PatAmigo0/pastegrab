@@ -3,6 +3,7 @@
 
 mod files;
 pub mod launch;
+pub mod machine;
 #[cfg(windows)]
 mod sys;
 mod unpack;
