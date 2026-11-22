@@ -111,3 +111,7 @@ pub(crate) fn move_no_replace(from: &Path, to: &Path) -> io::Result<()> {
 }
 
 pub(crate) const fn mark_downloaded(_file: &Path) {}
+
+pub(crate) fn short_path(path: &Path) -> std::path::PathBuf {
+    path.to_owned()
+}

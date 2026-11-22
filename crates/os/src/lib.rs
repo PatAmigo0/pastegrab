@@ -7,6 +7,13 @@ mod sys;
 pub use files::LocalFiles;
 pub use process::LocalRunner;
 
+/// The 8.3 form of an existing path on Windows, for children that open paths through the ANSI
+/// code page. Elsewhere, and on volumes without short names, the path itself.
+#[must_use]
+pub fn short_path(path: &std::path::Path) -> std::path::PathBuf {
+    sys::short_path(path)
+}
+
 /// Loads DLLs from System32 only, so one planted next to a download never loads.
 ///
 /// # Errors

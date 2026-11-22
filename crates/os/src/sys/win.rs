@@ -3,15 +3,16 @@
 use std::ffi::OsString;
 use std::fs;
 use std::io;
+use std::os::windows::ffi::OsStringExt;
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 use std::os::windows::process::{ChildExt, CommandExt};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::{Arc, Mutex};
 
 use pastegrab_app::ports::Exit;
 use windows::Win32::Foundation::HANDLE;
-use windows::Win32::Storage::FileSystem::{MOVEFILE_WRITE_THROUGH, MoveFileExW};
+use windows::Win32::Storage::FileSystem::{GetShortPathNameW, MOVEFILE_WRITE_THROUGH, MoveFileExW};
 use windows::Win32::System::Diagnostics::Debug::{
     GetErrorMode, SEM_FAILCRITICALERRORS, SetErrorMode, THREAD_ERROR_MODE,
 };
@@ -145,6 +146,22 @@ pub(crate) fn move_no_replace(from: &Path, to: &Path) -> io::Result<()> {
     let (from, to) = (HSTRING::from(from), HSTRING::from(to));
     // SAFETY: both strings are NUL-terminated and outlive the call.
     unsafe { MoveFileExW(&from, &to, MOVEFILE_WRITE_THROUGH) }.map_err(io::Error::from)
+}
+
+pub(crate) fn short_path(path: &Path) -> PathBuf {
+    let long = HSTRING::from(path);
+    // SAFETY: with no buffer the call only returns the length, terminator included.
+    let needed = unsafe { GetShortPathNameW(&long, None) };
+    let Ok(len) = usize::try_from(needed) else {
+        return path.to_owned();
+    };
+    let mut buf = vec![0; len];
+    // SAFETY: `buf` holds `len` units and outlives the call.
+    let written = unsafe { GetShortPathNameW(&long, Some(&mut buf)) };
+    match usize::try_from(written) {
+        Ok(n) if n > 0 && n < buf.len() => PathBuf::from(OsString::from_wide(&buf[..n])),
+        _ => path.to_owned(),
+    }
 }
 
 pub(crate) fn mark_downloaded(file: &Path) {
