@@ -3,12 +3,14 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
 
 use pastegrab_app::ports::{ProcessRunner, SettingsStore};
 use pastegrab_app::queue::{Queue, Settings};
-use pastegrab_app::runtime;
+use pastegrab_app::runtime::{self, Handle};
 use pastegrab_app::steps::Ports;
-use pastegrab_deploy::{launch, machine};
+use pastegrab_deploy::{cleanup, launch, machine};
 use pastegrab_domain::job::Permits;
 use pastegrab_domain::plan::Machine;
 use pastegrab_domain::profile::ProfileKind;
@@ -79,12 +81,21 @@ fn start() -> Result<(), String> {
         settings: Some(Box::new(settings)),
     };
     // A chosen folder on a drive that is gone falls back to Videos.
+    let videos = pastegrab_win32::videos_folder()
+        .or_else(|| env::home_dir().map(|home| home.join("Videos")));
     let dest = choices
         .dest
         .filter(|dir| dir.is_dir())
-        .or_else(pastegrab_win32::videos_folder)
-        .or_else(|| env::home_dir().map(|home| home.join("Videos")))
+        .or_else(|| videos.clone())
         .ok_or("no Videos folder")?;
+    let install_root = env::current_exe()
+        .ok()
+        .and_then(|exe| launch::root_of(&exe).map(Path::to_path_buf));
+    let mut sweep_dests = vec![dest.as_path()];
+    if let Some(videos) = videos.as_deref() {
+        sweep_dests.push(videos);
+    }
+    cleanup::sweep_startup(&sweep_dests, &data, install_root.as_deref());
     let tutorial_seen = choices.tutorial.unwrap_or(0);
     let queue = Queue::new(Settings {
         profile: choices.profile.unwrap_or(ProfileKind::Video),
@@ -100,12 +111,14 @@ fn start() -> Result<(), String> {
         tutorial: tutorial_seen,
     });
     let view = Arc::new(WinView::default());
-    let (core, _) = runtime::start(queue, Arc::new(ports), Arc::clone(&view) as _, false);
+    let (core, runtime_thread) =
+        runtime::start(queue, Arc::new(ports), Arc::clone(&view) as _, false);
+    let shutdown_handle = core.clone();
     let shown = move || {
         confirm_version();
         crate::update::start(data_for_update);
     };
-    pastegrab_win32::run(
+    let result = pastegrab_win32::run(
         core,
         view,
         Startup {
@@ -114,7 +127,23 @@ fn start() -> Result<(), String> {
             tutorial_seen,
         },
         shown,
-    )
+    );
+    wait_shutdown(shutdown_handle, runtime_thread);
+    result
+}
+
+/// Cancels active work and waits briefly for workers to clean their working folders.
+fn wait_shutdown<T: Send + 'static>(core: Handle, thread: thread::JoinHandle<T>) {
+    core.shutdown();
+    drop(core);
+    let (done_tx, done_rx) = std::sync::mpsc::sync_channel(1);
+    let _ = thread::Builder::new()
+        .name("shutdown-wait".into())
+        .spawn(move || {
+            let _ = thread.join();
+            let _ = done_tx.send(());
+        });
+    let _ = done_rx.recv_timeout(Duration::from_secs(2));
 }
 
 /// `tools` beside the `app` folder in an install, or beside the exe in a development copy.
