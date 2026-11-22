@@ -4,7 +4,7 @@
 
 ## Signing key
 
-**`keys/release.pub` is the minisign key every app update must be signed with, and the app carries it.** The secret key and its password stay in your password manager, never in the repository. Updates signed by any other key are refused, so losing the secret key ends updates until he reinstalls from a new setup.
+**`keys/release.pub` is the minisign key every app update must be signed with, and the app carries it.** The secret key and its password stay in your password manager, never in the repository. The app refuses updates signed by any other key. Losing the secret key ends updates until he reinstalls from a new setup.
 
 ## Antivirus
 
