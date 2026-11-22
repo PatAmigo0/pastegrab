@@ -46,6 +46,8 @@ pub struct Strings {
     pub more: fn(usize) -> String,
     /// The window's title.
     pub window_title: &'static str,
+    /// The tray notification for a job that ended while the window was in the background.
+    pub notices: Notices,
     /// The installer.
     pub setup: Setup,
     /// `pastegrab.exe --uninstall`, from Programs and Features.
@@ -64,6 +66,15 @@ pub struct Uninstall {
     /// When everything is gone.
     pub done: &'static str,
     /// Before the error when something stayed.
+    pub failed: &'static str,
+}
+
+/// Tray notification headings; the video's title goes under them.
+#[derive(Debug)]
+pub struct Notices {
+    /// The file is in place.
+    pub done: &'static str,
+    /// The job stopped with a failure, whose line follows the title.
     pub failed: &'static str,
 }
 

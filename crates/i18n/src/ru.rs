@@ -1,4 +1,4 @@
-use crate::{Columns, Failures, Menu, NoPlan, Setup, States, Strings, Uninstall};
+use crate::{Columns, Failures, Menu, NoPlan, Notices, Setup, States, Strings, Uninstall};
 
 const KB: u64 = 1000;
 const MB: u64 = 1000 * KB;
@@ -74,6 +74,10 @@ pub const RU: Strings = Strings {
     duration,
     more: |n| format!("и ещё {n}"),
     window_title: "pastegrab",
+    notices: Notices {
+        done: "Видео скачано",
+        failed: "Видео не скачалось",
+    },
     setup: Setup {
         title: "Установка pastegrab",
         ask: "Установить pastegrab?",
