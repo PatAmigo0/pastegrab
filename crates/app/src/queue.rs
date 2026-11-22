@@ -373,7 +373,8 @@ impl Queue {
         let job = self.jobs.iter().find(|j| j.id == id)?;
         let name = id.0.to_string();
         let probe_dir = self.settings.data.join("jobs").join(&name);
-        let fetch_dir = self.settings.dest.join(".pastegrab").join(&name);
+        // One folder per job, with no shared parent left behind in the destination.
+        let fetch_dir = self.settings.dest.join(format!(".pastegrab-{name}"));
         let task = match step {
             Step::Probe => Task::Probe(ProbeTask {
                 link: job.link.clone(),

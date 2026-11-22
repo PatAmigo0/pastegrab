@@ -76,11 +76,11 @@ fn a_job_walks_from_probe_to_done() {
     });
     let fetch = fetch.expect("a fetch starts");
     assert_eq!(fetch.plan.selector(), "136+140");
-    assert_eq!(fetch.work_dir, PathBuf::from("/videos/.pastegrab/1"));
+    assert_eq!(fetch.work_dir, PathBuf::from("/videos/.pastegrab-1"));
 
     let fx = q.handle(Input::Done(
         JobId(1),
-        Outcome::Fetched(Ok(PathBuf::from("/videos/.pastegrab/1/AAAAAAAAAAA.mp4"))),
+        Outcome::Fetched(Ok(PathBuf::from("/videos/.pastegrab-1/AAAAAAAAAAA.mp4"))),
     ));
     let convert = fx.iter().find_map(|e| match e {
         Effect::Start(_, Task::Convert(t)) => Some(t.clone()),
