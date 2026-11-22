@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# defender-scan VM FILE...: copies FILEs into a running lab VM, updates Defender's definitions as
+# far as that Windows still gets them, and scans the copies without removing anything.
+# needs: virsh python3 base64
+set -euo pipefail
+vm=$1
+shift
+lab=$(cd "$(dirname "$0")" && pwd)
+"$lab/guest-run" "$vm" 'Remove-Item -Recurse -Force C:\pg\scan -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force C:\pg\scan | Out-Null' >/dev/null
+for f in "$@"; do
+    "$lab/guest-put" "$vm" "$f" "C:\\pg\\scan\\$(basename "$f")" >/dev/null
+done
+# The report comes back base64-encoded, so the console code page can't damage it.
+GUEST_RUN_TIMEOUT=1800 "$lab/guest-run" "$vm" "$(cat <<'PS'
+$mp = "$env:ProgramFiles\Windows Defender\MpCmdRun.exe"
+$r = New-Object Text.StringBuilder
+# Windows Update no longer serves 8.0, so Microsoft's own download is the second try.
+$update = (& $mp -SignatureUpdate 2>&1 | Out-String) + (& $mp -SignatureUpdate -MMPC 2>&1 | Out-String)
+$sig = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows Defender\Signature Updates'
+$when = 'never'
+if ($sig.SignaturesLastUpdated) { $when = [DateTime]::FromFileTime([BitConverter]::ToInt64($sig.SignaturesLastUpdated, 0)) }
+[void]$r.AppendLine("engine $($sig.EngineVersion), definitions $($sig.AVSignatureVersion), updated $when")
+[void]$r.AppendLine('update: ' + (($update -split "`n" | Where-Object { $_.Trim() }) -join ' | '))
+$scan = & $mp -Scan -ScanType 3 -File 'C:\pg\scan' -DisableRemediation 2>&1 | Out-String
+[void]$r.AppendLine("scan exit $LASTEXITCODE (0 clean, 2 threats)")
+[void]$r.AppendLine(($scan -split "`n" | Where-Object { $_.Trim() }) -join "`n")
+foreach ($f in Get-ChildItem C:\pg\scan) { [void]$r.AppendLine("  $($f.Name) $($f.Length)") }
+'B64:' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($r.ToString()))
+PS
+)" | grep '^B64:' | cut -c5- | tr -d '\r' | base64 -d
