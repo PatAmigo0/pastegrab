@@ -11,7 +11,7 @@ mod unpack;
 pub mod updater;
 
 #[cfg(windows)]
-pub use sys::{Entry, register, unregister};
+pub use sys::{Entry, probe, register, run_elevated, unregister};
 pub use unpack::{install, unpack};
 
 use std::env::{self, consts::EXE_SUFFIX};

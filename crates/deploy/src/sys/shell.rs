@@ -1,7 +1,5 @@
 //! The desktop and Start menu shortcuts and the per-user Programs and Features entry.
 
-#![allow(unsafe_code)]
-
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
