@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use pastegrab_app::ports::ProcessRunner;
+use pastegrab_app::ports::{ProcessRunner, SettingsStore};
 use pastegrab_app::queue::{Queue, Settings};
 use pastegrab_app::runtime;
 use pastegrab_app::steps::Ports;
@@ -14,6 +14,7 @@ use pastegrab_domain::profile::ProfileKind;
 use pastegrab_ffmpeg::{Ffmpeg, Tools};
 use pastegrab_http::Direct;
 use pastegrab_os::{LocalFiles, LocalRunner};
+use pastegrab_store::JsonSettings;
 use pastegrab_win32::{Startup, WinView};
 use pastegrab_ytdlp::{Engine, YtDlp};
 
@@ -55,18 +56,25 @@ fn start() -> Result<(), String> {
     let runner: Arc<dyn ProcessRunner> = Arc::new(LocalRunner::new());
     let ytdlp = YtDlp::new(Arc::clone(&runner), engine);
     let ffmpeg = Ffmpeg::new(runner, tools);
+    let settings = JsonSettings::new(data.join("settings.json"));
+    let choices = settings.load().unwrap_or_default();
     let ports = Ports {
         resolvers: vec![Box::new(Direct::default()), Box::new(ytdlp.clone())],
         fetchers: vec![Box::new(Direct::default()), Box::new(ytdlp)],
         probe: Box::new(ffmpeg.clone()),
         transcoder: Box::new(ffmpeg),
         files: Box::new(LocalFiles),
+        settings: Some(Box::new(settings)),
     };
-    let dest = pastegrab_win32::videos_folder()
+    // A chosen folder on a drive that is gone falls back to Videos.
+    let dest = choices
+        .dest
+        .filter(|dir| dir.is_dir())
+        .or_else(pastegrab_win32::videos_folder)
         .or_else(|| env::home_dir().map(|home| home.join("Videos")))
         .ok_or("no Videos folder")?;
     let queue = Queue::new(Settings {
-        profile: ProfileKind::Video,
+        profile: choices.profile.unwrap_or(ProfileKind::Video),
         machine: Machine {
             screen_height: pastegrab_win32::screen_height(),
         },

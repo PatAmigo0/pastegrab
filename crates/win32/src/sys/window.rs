@@ -516,6 +516,7 @@ impl Ui {
                 for id in ids {
                     let _ = self.core.send(Input::Profile(id, profile));
                 }
+                let _ = self.core.send(Input::DefaultProfile(profile));
             }
             (ID_CHANGE, BN_CLICKED) => {
                 let start = self.dest.borrow().clone();
