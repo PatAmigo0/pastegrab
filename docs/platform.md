@@ -71,7 +71,7 @@ A copy carrying the browser's internet mark, opened from Explorer, raised «От
 
 **While `Cops1922` downloaded, the taskbar button filled along with its row, both at 29%, and `powercfg /requests` listed `pastegrab.exe` under SYSTEM.** Both cleared when the job reached «Готово».
 
-The job list draws the visual style's own green progress bar beside «Загрузка 9%, 1,2 МБ/с», on the selection color when the row is selected, and a deleted YouTube video's «Видео удалено или закрыто для вашей страны» in muted red. That failure line is cut with an ellipsis at the default window width.
+The job list draws the visual style's own green progress bar beside «Загрузка 9%, 1,2 МБ/с», on the selection color when the row is selected, and a deleted YouTube video's «Видео удалено или закрыто для вашей страны» in muted red. At 880 px, the window's default width, with the state column taking half the list, that failure line fits whole.
 
 With the window minimized, «Me at the zoo» finished under a tray balloon, «Видео скачано» over the title. A click on the balloon restored the window and took the tray icon away.
 
