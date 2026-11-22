@@ -6,7 +6,7 @@ use pastegrab_app::Failure;
 use pastegrab_app::ports::{Resolved, Source, ViewUpdate};
 use pastegrab_app::queue::{Effect, Input, Outcome, Paste, Queue, Settings, Task};
 use pastegrab_domain::job::{FailureKind, JobId, JobState, Permits, Step};
-use pastegrab_domain::plan::Machine;
+use pastegrab_domain::plan::{Machine, PlanError};
 use pastegrab_domain::profile::ProfileKind;
 use pastegrab_testkit::media;
 
@@ -25,6 +25,7 @@ fn paste(text: &str) -> Input {
         text: text.into(),
         profile: None,
         section: None,
+        hold: false,
     })
 }
 
@@ -135,6 +136,7 @@ fn a_profile_that_finds_nothing_fails_the_job() {
         text: "https://youtu.be/AAAAAAAAAAA".into(),
         profile: Some(ProfileKind::Video),
         section: None,
+        hold: false,
     }));
     let mut sound_only = resolved("Track");
     sound_only.info.formats.retain(|f| f.video.is_none());
@@ -152,4 +154,64 @@ fn text_without_links_says_so_and_duplicates_are_skipped() {
     q.handle(paste("https://youtu.be/AAAAAAAAAAA"));
     q.handle(paste("https://www.youtube.com/watch?v=AAAAAAAAAAA"));
     assert_eq!(q.states().len(), 1);
+}
+
+fn held(text: &str) -> Input {
+    Input::Paste(Paste {
+        text: text.into(),
+        profile: None,
+        section: None,
+        hold: true,
+    })
+}
+
+fn planned(fx: &[Effect]) -> Option<String> {
+    fx.iter().find_map(|e| match e {
+        Effect::Show(ViewUpdate::Planned { plan, .. }) => Some(plan.selector()),
+        _ => None,
+    })
+}
+
+#[test]
+fn a_held_job_waits_after_its_probe_until_start() {
+    let mut q = queue();
+    q.handle(held("https://youtu.be/AAAAAAAAAAA"));
+    let fx = q.handle(Input::Done(JobId(1), Outcome::Probed(Ok(resolved("Race")))));
+    assert_eq!(started(&fx), []);
+    assert_eq!(q.states()[0].1, JobState::Ready);
+    assert!(q.is_idle());
+    let fx = q.handle(Input::Start(JobId(1)));
+    assert_eq!(started(&fx), [(JobId(1), Step::Fetch)]);
+}
+
+#[test]
+fn another_profile_plans_again_from_the_same_probe() {
+    let mut q = queue();
+    q.handle(held("https://youtu.be/AAAAAAAAAAA"));
+    q.handle(Input::Done(JobId(1), Outcome::Probed(Ok(resolved("Race")))));
+    let fx = q.handle(Input::Profile(JobId(1), ProfileKind::Audio));
+    assert_eq!(started(&fx), [], "no second probe");
+    assert_eq!(planned(&fx).as_deref(), Some("140"));
+}
+
+#[test]
+fn a_profile_the_source_cannot_meet_keeps_a_held_job_waiting() {
+    let mut q = queue();
+    q.handle(held("https://youtu.be/AAAAAAAAAAA"));
+    let mut silent = resolved("Race");
+    silent.info.formats.retain(|f| f.audio.is_none());
+    q.handle(Input::Done(JobId(1), Outcome::Probed(Ok(silent))));
+    let fx = q.handle(Input::Profile(JobId(1), ProfileKind::Audio));
+    assert!(fx.iter().any(|e| matches!(
+        e,
+        Effect::Show(ViewUpdate::NoPlan {
+            reason: PlanError::NoAudio,
+            ..
+        })
+    )));
+    let fx = q.handle(Input::Start(JobId(1)));
+    assert_eq!(started(&fx), [], "nothing to download yet");
+    let fx = q.handle(Input::Profile(JobId(1), ProfileKind::Video));
+    assert_eq!(planned(&fx).as_deref(), Some("136"));
+    assert_eq!(started(&fx), [(JobId(1), Step::Fetch)]);
 }

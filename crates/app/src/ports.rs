@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use pastegrab_domain::job::{JobId, JobState};
 use pastegrab_domain::link::Link;
 use pastegrab_domain::media::{FileProbe, MediaInfo};
-use pastegrab_domain::plan::{Convert, FetchPlan};
+use pastegrab_domain::plan::{Convert, FetchPlan, PlanError};
 
 use crate::cancel::Cancel;
 use crate::failure::Failure;
@@ -251,6 +251,15 @@ pub enum ViewUpdate {
         title: String,
         /// The formats and the expected size.
         plan: FetchPlan,
+    },
+    /// The probe worked, and the profile asks for something the source lacks.
+    NoPlan {
+        /// The job.
+        id: JobId,
+        /// The video's title.
+        title: String,
+        /// What is missing.
+        reason: PlanError,
     },
     /// The file is in place.
     Finished {

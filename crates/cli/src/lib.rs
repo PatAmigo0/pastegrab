@@ -36,6 +36,9 @@ impl View for TermView {
                     format_args!("{title}: formats {formats}, about {size} MB"),
                 );
             }
+            ViewUpdate::NoPlan { id, title, reason } => {
+                note(id, format_args!("{title}: no plan, {reason}"));
+            }
             ViewUpdate::Finished { id, file } => {
                 let _ = writeln!(io::stdout().lock(), "{}", file.display());
                 note(id, format_args!("done"));

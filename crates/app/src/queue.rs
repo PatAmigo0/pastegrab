@@ -3,7 +3,9 @@
 
 use std::path::PathBuf;
 
-use pastegrab_domain::job::{FailureKind, JobEvent, JobId, JobState, Permits, Step, schedule};
+use pastegrab_domain::job::{
+    FailureKind, JobEvent, JobId, JobState, Permits, Step, Waiting, schedule,
+};
 use pastegrab_domain::link::{Intent, Link, analyze};
 use pastegrab_domain::plan::{FetchPlan, Machine, Section, plan_fetch};
 use pastegrab_domain::profile::ProfileKind;
@@ -38,6 +40,8 @@ pub struct Paste {
     pub profile: Option<ProfileKind>,
     /// Only this part of each video.
     pub section: Option<Section>,
+    /// Each job waits after its probe until `Input::Start`.
+    pub hold: bool,
 }
 
 /// Everything that reaches the core.
@@ -53,6 +57,10 @@ pub enum Input {
     Resume(JobId),
     /// Start a stopped job over.
     Retry(JobId),
+    /// Let a held job download.
+    Start(JobId),
+    /// Another profile; a probed job gets a new plan from the same probe.
+    Profile(JobId, ProfileKind),
     /// A worker finished a step.
     Done(JobId, Outcome),
 }
@@ -175,6 +183,7 @@ struct Job {
     fetched: Option<PathBuf>,
     retries: u8,
     impersonate: bool,
+    held: bool,
 }
 
 /// Every job and the rules that move them.
@@ -183,6 +192,13 @@ pub struct Queue {
     settings: Settings,
     jobs: Vec<Job>,
     next_id: u64,
+}
+
+impl Job {
+    /// Probed and waiting for the person, or for a profile it can meet.
+    fn waits_for_start(&self) -> bool {
+        self.state == JobState::Ready && (self.held || self.plan.is_none())
+    }
 }
 
 impl Queue {
@@ -210,18 +226,24 @@ impl Queue {
                 }
                 self.apply(id, JobEvent::Retry, &mut fx);
             }
+            Input::Start(id) => {
+                if let Some(job) = self.job(id) {
+                    job.held = false;
+                }
+            }
+            Input::Profile(id, profile) => self.reprofile(id, profile, &mut fx),
             Input::Done(id, outcome) => self.done(id, outcome, &mut fx),
         }
         self.start_steps(&mut fx);
         fx
     }
 
-    /// Nothing runs or waits; only held or finished jobs remain.
+    /// Nothing runs or waits; only paused, held or finished jobs remain.
     #[must_use]
     pub fn is_idle(&self) -> bool {
-        self.jobs
-            .iter()
-            .all(|j| j.state.is_over() || matches!(j.state, JobState::Paused(_)))
+        self.jobs.iter().all(|j| {
+            j.state.is_over() || matches!(j.state, JobState::Paused(_)) || j.waits_for_start()
+        })
     }
 
     /// Every job's state, in queue order.
@@ -268,6 +290,7 @@ impl Queue {
                 fetched: None,
                 retries: 0,
                 impersonate: false,
+                held: paste.hold,
             });
         }
     }
@@ -305,19 +328,25 @@ impl Queue {
         }
         match outcome {
             Outcome::Probed(Ok(resolved)) => {
-                match plan_fetch(&resolved.info, &job.profile.profile(), machine, job.section) {
+                let planned =
+                    plan_fetch(&resolved.info, &job.profile.profile(), machine, job.section);
+                let title = resolved.info.title.clone();
+                job.resolved = Some(resolved);
+                match planned {
                     Ok(plan) => {
-                        fx.push(Effect::Show(ViewUpdate::Planned {
-                            id,
-                            title: resolved.info.title.clone(),
-                            plan: plan.clone(),
-                        }));
-                        job.plan = Some(plan);
-                        job.resolved = Some(resolved);
-                        self.apply(id, JobEvent::Finish(Step::Probe), fx);
+                        job.plan = Some(plan.clone());
+                        fx.push(Effect::Show(ViewUpdate::Planned { id, title, plan }));
                     }
-                    Err(e) => self.fail(id, Failure::new(FailureKind::NoFormat, e.to_string()), fx),
+                    // A held job waits for another profile instead of failing.
+                    Err(reason) if job.held => {
+                        fx.push(Effect::Show(ViewUpdate::NoPlan { id, title, reason }));
+                    }
+                    Err(e) => {
+                        let failure = Failure::new(FailureKind::NoFormat, e.to_string());
+                        return self.fail(id, failure, fx);
+                    }
                 }
+                self.apply(id, JobEvent::Finish(Step::Probe), fx);
             }
             Outcome::Fetched(Ok(file)) => {
                 job.fetched = Some(file);
@@ -357,8 +386,41 @@ impl Queue {
         }
     }
 
+    fn reprofile(&mut self, id: JobId, profile: ProfileKind, fx: &mut Vec<Effect>) {
+        let machine = self.settings.machine;
+        let Some(job) = self.job(id) else {
+            return;
+        };
+        let probed = match job.state {
+            JobState::Queued | JobState::Probing | JobState::Paused(Waiting::Queued) => false,
+            JobState::Ready | JobState::Paused(Waiting::Ready) => true,
+            _ => return,
+        };
+        job.profile = profile;
+        let Some(resolved) = job.resolved.as_ref().filter(|_| probed) else {
+            return;
+        };
+        let title = resolved.info.title.clone();
+        match plan_fetch(&resolved.info, &profile.profile(), machine, job.section) {
+            Ok(plan) => {
+                job.plan = Some(plan.clone());
+                fx.push(Effect::Show(ViewUpdate::Planned { id, title, plan }));
+            }
+            Err(reason) => {
+                job.plan = None;
+                fx.push(Effect::Show(ViewUpdate::NoPlan { id, title, reason }));
+            }
+        }
+    }
+
     fn start_steps(&mut self, fx: &mut Vec<Effect>) {
-        for (id, step) in schedule(&self.states(), self.settings.permits) {
+        let offered: Vec<(JobId, JobState)> = self
+            .jobs
+            .iter()
+            .filter(|j| !j.waits_for_start())
+            .map(|j| (j.id, j.state))
+            .collect();
+        for (id, step) in schedule(&offered, self.settings.permits) {
             let task = self.task(id, step);
             self.apply(id, JobEvent::Start(step), fx);
             if let Some(task) = task {

@@ -152,6 +152,7 @@ fn run() -> Result<ExitCode, String> {
         text,
         profile: options.profile,
         section: None,
+        hold: false,
     };
     if !handle.send(Input::Paste(paste)) {
         return Err("the queue stopped before the paste".to_owned());

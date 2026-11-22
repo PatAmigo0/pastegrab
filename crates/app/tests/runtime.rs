@@ -59,6 +59,7 @@ fn run(text: &str, probe: FileProbe, fetch_failures: Vec<Result<(), Failure>>) -
         text: text.into(),
         profile: None,
         section: None,
+        hold: false,
     })));
     let states = thread.join().expect("the queue thread ends");
     Run {
