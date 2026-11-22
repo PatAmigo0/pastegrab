@@ -61,6 +61,8 @@ pub enum Input {
     Start(JobId),
     /// Another profile; a probed job gets a new plan from the same probe.
     Profile(JobId, ProfileKind),
+    /// Another destination folder for jobs that haven't started their download.
+    Dest(PathBuf),
     /// A worker finished a step.
     Done(JobId, Outcome),
 }
@@ -232,6 +234,7 @@ impl Queue {
                 }
             }
             Input::Profile(id, profile) => self.reprofile(id, profile, &mut fx),
+            Input::Dest(dest) => self.settings.dest = dest,
             Input::Done(id, outcome) => self.done(id, outcome, &mut fx),
         }
         self.start_steps(&mut fx);
@@ -332,6 +335,7 @@ impl Queue {
                 let profile = job.profile;
                 let planned = plan_fetch(&resolved.info, &profile.profile(), machine, job.section);
                 let title = resolved.info.title.clone();
+                let duration = resolved.info.duration;
                 job.resolved = Some(resolved);
                 match planned {
                     Ok(plan) => {
@@ -340,6 +344,7 @@ impl Queue {
                             id,
                             title,
                             profile,
+                            duration,
                             plan,
                         };
                         fx.push(Effect::Show(update));
@@ -350,6 +355,7 @@ impl Queue {
                             id,
                             title,
                             profile,
+                            duration,
                             reason,
                         };
                         fx.push(Effect::Show(update));
@@ -414,6 +420,7 @@ impl Queue {
             return;
         };
         let title = resolved.info.title.clone();
+        let duration = resolved.info.duration;
         let update = match plan_fetch(&resolved.info, &profile.profile(), machine, job.section) {
             Ok(plan) => {
                 job.plan = Some(plan.clone());
@@ -421,6 +428,7 @@ impl Queue {
                     id,
                     title,
                     profile,
+                    duration,
                     plan,
                 }
             }
@@ -430,6 +438,7 @@ impl Queue {
                     id,
                     title,
                     profile,
+                    duration,
                     reason,
                 }
             }

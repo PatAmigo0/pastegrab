@@ -254,6 +254,8 @@ pub enum ViewUpdate {
         title: String,
         /// The profile the plan follows.
         profile: ProfileKind,
+        /// Seconds, when the site says.
+        duration: Option<u32>,
         /// The formats and the expected size.
         plan: FetchPlan,
     },
@@ -265,6 +267,8 @@ pub enum ViewUpdate {
         title: String,
         /// The profile that finds nothing.
         profile: ProfileKind,
+        /// Seconds, when the site says.
+        duration: Option<u32>,
         /// What is missing.
         reason: PlanError,
     },

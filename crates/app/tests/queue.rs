@@ -215,3 +215,16 @@ fn a_profile_the_source_cannot_meet_keeps_a_held_job_waiting() {
     assert_eq!(planned(&fx).as_deref(), Some("136"));
     assert_eq!(started(&fx), [(JobId(1), Step::Fetch)]);
 }
+
+#[test]
+fn another_folder_applies_to_fetches_that_start_after_it() {
+    let mut q = queue();
+    q.handle(paste("https://youtu.be/AAAAAAAAAAA"));
+    q.handle(Input::Dest(PathBuf::from("/elsewhere")));
+    let fx = q.handle(Input::Done(JobId(1), Outcome::Probed(Ok(resolved("Race")))));
+    let work = fx.iter().find_map(|e| match e {
+        Effect::Start(_, Task::Fetch(t)) => Some(t.work_dir.clone()),
+        _ => None,
+    });
+    assert_eq!(work, Some(PathBuf::from("/elsewhere/.pastegrab-1")));
+}

@@ -21,6 +21,8 @@ pub struct Row {
     pub profile: ProfileKind,
     /// The video's title, once the probe names it.
     pub title: Option<String>,
+    /// Seconds, when the site says.
+    pub duration: Option<u32>,
     /// Where the job is.
     pub state: JobState,
     /// The formats the planner picked.
@@ -72,6 +74,7 @@ impl Board {
                     url,
                     profile,
                     title: None,
+                    duration: None,
                     state: JobState::Queued,
                     plan: None,
                     no_plan: None,
@@ -95,10 +98,12 @@ impl Board {
                 id,
                 title,
                 profile,
+                duration,
                 plan,
             } => self.edit(id, |row| {
                 row.title = Some(title);
                 row.profile = profile;
+                row.duration = duration;
                 row.plan = Some(plan);
                 row.no_plan = None;
             }),
@@ -106,10 +111,12 @@ impl Board {
                 id,
                 title,
                 profile,
+                duration,
                 reason,
             } => self.edit(id, |row| {
                 row.title = Some(title);
                 row.profile = profile;
+                row.duration = duration;
                 row.plan = None;
                 row.no_plan = Some(reason);
             }),
@@ -192,8 +199,10 @@ mod tests {
             id: JobId(2),
             title: "Забег".into(),
             profile: ProfileKind::Audio,
+            duration: Some(9664),
             reason: PlanError::NoAudio,
         });
+        assert_eq!(board.rows()[1].duration, Some(9664));
         assert_eq!(board.rows()[1].profile, ProfileKind::Audio);
         assert_eq!(change, Change::Row(1));
         state(&mut board, 2, JobState::Ready);
