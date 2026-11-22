@@ -1,5 +1,6 @@
 use crate::{
-    Columns, Failures, Menu, NoPlan, Notices, Report, RowActions, Setup, States, Strings, Uninstall,
+    Columns, Failures, Menu, NoPlan, Notices, Report, RowActions, Setup, States, Strings, Tutorial,
+    Uninstall,
 };
 
 const KB: u64 = 1000;
@@ -14,6 +15,7 @@ pub const RU: Strings = Strings {
     save_to: "Сохранять в:",
     change_folder: "Изменить",
     clear: "Очистить список",
+    help: "?",
     columns: Columns {
         title: "Название",
         state: "Состояние",
@@ -144,6 +146,19 @@ pub const RU: Strings = Strings {
         close_first: "Сначала закройте окно pastegrab, потом удалите программу ещё раз.",
         done: "pastegrab удалён. Скачанные видео остались на месте.",
         failed: "Не получилось удалить pastegrab полностью.",
+    },
+    tutorial: Tutorial {
+        step: |n, total| format!("Шаг {n} из {total}"),
+        steps: [
+            "Скопируйте ссылку на видео в браузере. Когда переключитесь на pastegrab, программа подхватит её сама.",
+            "Или вставьте ссылку в это поле и нажмите «OK». Ctrl+V работает в любом месте окна.",
+            "Когда видео определится, выберите формат («Видео», «Только звук» или «Для анализа») и нажмите «Скачать».",
+            "Ход загрузки виден в этом списке. Значок × отменяет загрузку, а у готового видео появляются «Открыть» и «Папка».",
+            "Готовые файлы сохраняются в папку внизу окна. Другую папку выбирает кнопка «Изменить», а эти подсказки снова открывает «?».",
+        ],
+        next: "Дальше",
+        done: "Готово",
+        skip: "Пропустить",
     },
 };
 

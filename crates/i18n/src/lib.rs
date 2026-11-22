@@ -22,6 +22,8 @@ pub struct Strings {
     pub change_folder: &'static str,
     /// The button that drops finished, failed and cancelled jobs from the list.
     pub clear: &'static str,
+    /// The button that replays the first-run guide.
+    pub help: &'static str,
     /// The job list's columns.
     pub columns: Columns,
     /// The job list's right-click menu.
@@ -58,6 +60,23 @@ pub struct Strings {
     pub setup: Setup,
     /// `pastegrab.exe --uninstall`, from Programs and Features.
     pub uninstall: Uninstall,
+    /// The five-step first-run guide.
+    pub tutorial: Tutorial,
+}
+
+/// Text for the five-step first-run guide.
+#[derive(Debug)]
+pub struct Tutorial {
+    /// "Шаг 1 из 5" from the 1-based step and total count.
+    pub step: fn(usize, usize) -> String,
+    /// The five steps, in order.
+    pub steps: [&'static str; 5],
+    /// Moves to the next step.
+    pub next: &'static str,
+    /// Closes the guide from the last step.
+    pub done: &'static str,
+    /// Closes the guide from any step.
+    pub skip: &'static str,
 }
 
 /// The uninstaller's text.
