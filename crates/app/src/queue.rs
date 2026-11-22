@@ -278,6 +278,7 @@ impl Queue {
             fx.push(Effect::Show(ViewUpdate::Added {
                 id,
                 url: link.url.to_string(),
+                profile,
             }));
             self.jobs.push(Job {
                 id,
@@ -328,18 +329,30 @@ impl Queue {
         }
         match outcome {
             Outcome::Probed(Ok(resolved)) => {
-                let planned =
-                    plan_fetch(&resolved.info, &job.profile.profile(), machine, job.section);
+                let profile = job.profile;
+                let planned = plan_fetch(&resolved.info, &profile.profile(), machine, job.section);
                 let title = resolved.info.title.clone();
                 job.resolved = Some(resolved);
                 match planned {
                     Ok(plan) => {
                         job.plan = Some(plan.clone());
-                        fx.push(Effect::Show(ViewUpdate::Planned { id, title, plan }));
+                        let update = ViewUpdate::Planned {
+                            id,
+                            title,
+                            profile,
+                            plan,
+                        };
+                        fx.push(Effect::Show(update));
                     }
                     // A held job waits for another profile instead of failing.
                     Err(reason) if job.held => {
-                        fx.push(Effect::Show(ViewUpdate::NoPlan { id, title, reason }));
+                        let update = ViewUpdate::NoPlan {
+                            id,
+                            title,
+                            profile,
+                            reason,
+                        };
+                        fx.push(Effect::Show(update));
                     }
                     Err(e) => {
                         let failure = Failure::new(FailureKind::NoFormat, e.to_string());
@@ -401,16 +414,27 @@ impl Queue {
             return;
         };
         let title = resolved.info.title.clone();
-        match plan_fetch(&resolved.info, &profile.profile(), machine, job.section) {
+        let update = match plan_fetch(&resolved.info, &profile.profile(), machine, job.section) {
             Ok(plan) => {
                 job.plan = Some(plan.clone());
-                fx.push(Effect::Show(ViewUpdate::Planned { id, title, plan }));
+                ViewUpdate::Planned {
+                    id,
+                    title,
+                    profile,
+                    plan,
+                }
             }
             Err(reason) => {
                 job.plan = None;
-                fx.push(Effect::Show(ViewUpdate::NoPlan { id, title, reason }));
+                ViewUpdate::NoPlan {
+                    id,
+                    title,
+                    profile,
+                    reason,
+                }
             }
-        }
+        };
+        fx.push(Effect::Show(update));
     }
 
     fn start_steps(&mut self, fx: &mut Vec<Effect>) {

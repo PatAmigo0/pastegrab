@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use pastegrab_domain::job::{JobId, JobState};
 use pastegrab_domain::plan::{FetchPlan, PlanError};
+use pastegrab_domain::profile::ProfileKind;
 
 use crate::failure::Failure;
 use crate::ports::{Phase, Progress, ViewUpdate};
@@ -16,6 +17,8 @@ pub struct Row {
     pub id: JobId,
     /// The cleaned link.
     pub url: String,
+    /// The profile the job follows.
+    pub profile: ProfileKind,
     /// The video's title, once the probe names it.
     pub title: Option<String>,
     /// Where the job is.
@@ -63,10 +66,11 @@ impl Board {
     /// Applies one update from the core.
     pub fn apply(&mut self, update: ViewUpdate) -> Change {
         match update {
-            ViewUpdate::Added { id, url } => {
+            ViewUpdate::Added { id, url, profile } => {
                 self.rows.push(Row {
                     id,
                     url,
+                    profile,
                     title: None,
                     state: JobState::Queued,
                     plan: None,
@@ -87,13 +91,25 @@ impl Board {
                     row.failure = None;
                 }
             }),
-            ViewUpdate::Planned { id, title, plan } => self.edit(id, |row| {
+            ViewUpdate::Planned {
+                id,
+                title,
+                profile,
+                plan,
+            } => self.edit(id, |row| {
                 row.title = Some(title);
+                row.profile = profile;
                 row.plan = Some(plan);
                 row.no_plan = None;
             }),
-            ViewUpdate::NoPlan { id, title, reason } => self.edit(id, |row| {
+            ViewUpdate::NoPlan {
+                id,
+                title,
+                profile,
+                reason,
+            } => self.edit(id, |row| {
                 row.title = Some(title);
+                row.profile = profile;
                 row.plan = None;
                 row.no_plan = Some(reason);
             }),
@@ -143,6 +159,7 @@ mod tests {
 
     use pastegrab_domain::job::{FailureKind, JobId, JobState};
     use pastegrab_domain::plan::PlanError;
+    use pastegrab_domain::profile::ProfileKind;
 
     use super::{Board, Change};
     use crate::failure::Failure;
@@ -150,7 +167,12 @@ mod tests {
 
     fn added(board: &mut Board, id: u64) {
         let url = format!("https://youtu.be/{id}");
-        board.apply(ViewUpdate::Added { id: JobId(id), url });
+        let profile = ProfileKind::Video;
+        board.apply(ViewUpdate::Added {
+            id: JobId(id),
+            url,
+            profile,
+        });
     }
 
     fn state(board: &mut Board, id: u64, state: JobState) -> Change {
@@ -169,8 +191,10 @@ mod tests {
         let change = board.apply(ViewUpdate::NoPlan {
             id: JobId(2),
             title: "Забег".into(),
+            profile: ProfileKind::Audio,
             reason: PlanError::NoAudio,
         });
+        assert_eq!(board.rows()[1].profile, ProfileKind::Audio);
         assert_eq!(change, Change::Row(1));
         state(&mut board, 2, JobState::Ready);
         let waiting: Vec<&str> = board.waiting().map(super::Row::name).collect();

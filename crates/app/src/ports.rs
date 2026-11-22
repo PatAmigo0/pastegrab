@@ -9,6 +9,7 @@ use pastegrab_domain::job::{JobId, JobState};
 use pastegrab_domain::link::Link;
 use pastegrab_domain::media::{FileProbe, MediaInfo};
 use pastegrab_domain::plan::{Convert, FetchPlan, PlanError};
+use pastegrab_domain::profile::ProfileKind;
 
 use crate::cancel::Cancel;
 use crate::failure::Failure;
@@ -235,6 +236,8 @@ pub enum ViewUpdate {
         id: JobId,
         /// The cleaned link.
         url: String,
+        /// The profile it starts with.
+        profile: ProfileKind,
     },
     /// The job moved on.
     State {
@@ -249,6 +252,8 @@ pub enum ViewUpdate {
         id: JobId,
         /// The video's title.
         title: String,
+        /// The profile the plan follows.
+        profile: ProfileKind,
         /// The formats and the expected size.
         plan: FetchPlan,
     },
@@ -258,6 +263,8 @@ pub enum ViewUpdate {
         id: JobId,
         /// The video's title.
         title: String,
+        /// The profile that finds nothing.
+        profile: ProfileKind,
         /// What is missing.
         reason: PlanError,
     },

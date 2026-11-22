@@ -20,13 +20,15 @@ pub struct TermView {
 impl View for TermView {
     fn apply(&self, update: ViewUpdate) {
         match update {
-            ViewUpdate::Added { id, url } => note(id, format_args!("{url}")),
+            ViewUpdate::Added { id, url, .. } => note(id, format_args!("{url}")),
             ViewUpdate::State { id, state } => {
                 if let Some(word) = state_word(state) {
                     note(id, format_args!("{word}"));
                 }
             }
-            ViewUpdate::Planned { id, title, plan } => {
+            ViewUpdate::Planned {
+                id, title, plan, ..
+            } => {
                 let size = plan
                     .expected_bytes
                     .map_or(0, |bytes| bytes.div_ceil(1_000_000));
@@ -36,7 +38,9 @@ impl View for TermView {
                     format_args!("{title}: formats {formats}, about {size} MB"),
                 );
             }
-            ViewUpdate::NoPlan { id, title, reason } => {
+            ViewUpdate::NoPlan {
+                id, title, reason, ..
+            } => {
                 note(id, format_args!("{title}: no plan, {reason}"));
             }
             ViewUpdate::Finished { id, file } => {
