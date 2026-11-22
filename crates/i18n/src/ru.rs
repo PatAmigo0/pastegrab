@@ -1,4 +1,4 @@
-use crate::{Columns, Failures, Menu, NoPlan, Setup, States, Strings};
+use crate::{Columns, Failures, Menu, NoPlan, Setup, States, Strings, Uninstall};
 
 const KB: u64 = 1000;
 const MB: u64 = 1000 * KB;
@@ -82,13 +82,28 @@ pub const RU: Strings = Strings {
         installing: "Устанавливаю pastegrab",
         unpacking: "Распаковываю файлы программы",
         done: "pastegrab установлен",
-        done_where: |folder| format!("Программа в папке\n{folder}"),
+        done_where: |folder| {
+            format!(
+                "Значок pastegrab появился на рабочем столе и в списке приложений.\n\
+                 Папка программы: {folder}"
+            )
+        },
+        open: "Открыть pastegrab",
+        shortcut: "Скачивание видео по ссылке",
         failed: "Не удалось установить pastegrab",
         failed_advice: "Если pastegrab открыт, закройте его и запустите установку снова.",
         needs_64_bit: "pastegrab работает только на 64-разрядной Windows 8 или новее, \
                        а эта Windows 32-разрядная.",
         needs_windows_8: "pastegrab работает на Windows 8 или новее.",
         empty: "В этой сборке установщика нет файлов программы.",
+    },
+    uninstall: Uninstall {
+        title: "Удаление pastegrab",
+        ask: "Удалить pastegrab?\n\nПрограмма, её настройки и значки будут удалены. \
+              Скачанные видео останутся на месте.",
+        close_first: "Сначала закройте окно pastegrab, потом удалите программу ещё раз.",
+        done: "pastegrab удалён. Скачанные видео остались на месте.",
+        failed: "Не получилось удалить pastegrab полностью.",
     },
 };
 

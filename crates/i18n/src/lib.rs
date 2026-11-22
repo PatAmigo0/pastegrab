@@ -48,6 +48,23 @@ pub struct Strings {
     pub window_title: &'static str,
     /// The installer.
     pub setup: Setup,
+    /// `pastegrab.exe --uninstall`, from Programs and Features.
+    pub uninstall: Uninstall,
+}
+
+/// The uninstaller's text.
+#[derive(Debug)]
+pub struct Uninstall {
+    /// The title of its message boxes.
+    pub title: &'static str,
+    /// The question, with what goes and what stays.
+    pub ask: &'static str,
+    /// While the window is open.
+    pub close_first: &'static str,
+    /// When everything is gone.
+    pub done: &'static str,
+    /// Before the error when something stayed.
+    pub failed: &'static str,
 }
 
 /// The installer's text.
@@ -67,8 +84,12 @@ pub struct Setup {
     pub unpacking: &'static str,
     /// The heading when it worked.
     pub done: &'static str,
-    /// The folder line under it.
+    /// Where the shortcuts and the folder are, under it.
     pub done_where: fn(&str) -> String,
+    /// The button that starts the installed program.
+    pub open: &'static str,
+    /// The shortcut's tooltip.
+    pub shortcut: &'static str,
     /// The heading when it failed.
     pub failed: &'static str,
     /// The advice under the error.
