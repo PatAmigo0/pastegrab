@@ -604,7 +604,7 @@ Everything exists, with `store` keeping only `settings.json`; `queue.json` comes
 
 The `win32` adapter, `pastegrab-setup.exe`, the tutorial, app self-update with rollback, Telegram reports, the VM checklist. Done when his footage sources work in both lab VMs within budget, setup's report arrives in your Telegram, and an update rolls out and back in the lab.
 
-The window runs on the 8.1 VM, installed by the setup: the link box with paste-anywhere and clipboard pickup, the card with title, length, size and profile, the job list with live progress and its menu, the folder picker, and one window per user that takes the links of a second start. The folder and the profile he picks last are kept in `settings.json`. The taskbar button shows the average progress of the running steps, and Windows doesn't sleep while work runs. Fades, the tutorial, the tray balloon and per-monitor DPI come next.
+The window runs on the 8.1 VM, installed by the setup: the link box with paste-anywhere and clipboard pickup, the card with title, length, size and profile, the job list with live progress and its menu, the folder picker, and one window per user that takes the links of a second start. The folder and the profile he picks last are kept in `settings.json`. The taskbar button shows the average progress of the running steps, and Windows doesn't sleep while work runs. Every exe carries the icon drawn in `crates/winres/pastegrab.svg`. Fades, the tutorial, the tray balloon and per-monitor DPI come next.
 
 ### M3 hardening
 
