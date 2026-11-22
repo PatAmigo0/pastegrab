@@ -69,6 +69,8 @@ A copy carrying the browser's internet mark, opened from Explorer, raised «От
 
 **The window, installed by the setup, ran the whole flow on the 8.1 VM.** Started with no arguments, it found a YouTube link on the clipboard and showed the card «Me at the zoo», «youtube.com · 0:19 · около 632 КБ». A second start with an archive.org link handed it to the running window and exited, leaving one process. «Скачать» started both jobs; the list showed «Загрузка 46%, 118 КБ/с» for the direct file, then «Готово» for both. The row menu's «Показать в папке» opened Explorer with the file selected, and Explorer drew thumbnails for both videos.
 
+**While `Cops1922` downloaded, the taskbar button filled along with its row, both at 29%, and `powercfg /requests` listed `pastegrab.exe` under SYSTEM.** Both cleared when the job reached «Готово».
+
 A `settings.json` naming the Desktop moved «Сохранять в:» there at the next start. PowerShell wrote that file with a UTF-8 byte order mark, as Notepad on Windows 8 does. `serde_json` refuses the mark, and the loader skips it.
 
 A window that Task Scheduler starts doesn't get the foreground, so keys sent to the VM land elsewhere until a click activates it; `lab/click` does that through the USB tablet.

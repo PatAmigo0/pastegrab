@@ -74,12 +74,13 @@ pastegrab/
     ytdlp/    Resolver and Fetcher over yt-dlp, its fixed flags, its error table
     ffmpeg/   Transcoder and MediaProbe over ffmpeg and ffprobe
     http/     HttpClient over ureq, direct-file Fetcher, tool downloads
-    os/       ProcessRunner, SystemInfo, sleep prevention, known folders, atomic writes, file logger
+    os/       ProcessRunner, SystemInfo, known folders, file logger
     store/    settings and queue as JSON
-    win32/    View over Win32
+    win32/    View over Win32, with taskbar progress and sleep prevention while work runs
     cli/      View over a terminal
     i18n/     one string table per language; no dependencies
-    deploy/   machine profile, build choice, verified downloads, tool installs; used by setup and the updater
+    deploy/   machine profile, build choice, verified downloads, tool installs, shortcuts and the
+              uninstall entry; used by setup, the updater and the uninstall
     testkit/  fakes and contract suites for every port
   apps/
     pastegrab/   Windows GUI composition root
@@ -94,7 +95,7 @@ pastegrab/
 
 - `cargo-deny` bans `windows`, `ureq` and `serde_json` except as direct dependencies of the crates that wrap them, named in its `wrappers` list.
 - `clippy.toml` in `domain` and `app` disallows `std::fs`, `std::process` and `std::net`.
-- `#![forbid(unsafe_code)]` everywhere except `os` and `win32`. In those two, `unsafe` lives in a `sys` module and every block carries a `// SAFETY:` comment.
+- `#![forbid(unsafe_code)]` everywhere except `os`, `win32`, `deploy` and the setup's dialog. In the crates, `unsafe` lives in a `sys` module, and every block carries a `// SAFETY:` comment.
 
 ### SOLID here
 
@@ -455,7 +456,7 @@ Chrome 109, the last version for Windows 8, encrypts cookies with DPAPI, which y
 
 Everything is per-user, and nothing needs admin rights. A `portable.txt` beside the exe moves the data folder next to it.
 
-- JSON files go to a temp file, get `FlushFileBuffers`, and are swapped in with `MoveFileExW(MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)`. The write-through flag covers the rename only, so the flush comes first. A crash leaves either the old file or the new one. Queue saves follow state transitions and happen at most once per second, while progress never touches the disk. The history in `queue.json` keeps the last 200 finished jobs.
+- JSON files go to a temp file, get `FlushFileBuffers`, and replace the old file with a rename. NTFS journals the rename, which leaves either the old file or the whole new one after a crash; a power cut right after a save can lose that one save. Queue saves follow state transitions and happen at most once per second, while progress never touches the disk. The history in `queue.json` keeps the last 200 finished jobs.
 - yt-dlp works in `<destination>\.pastegrab-<job id>\`, which goes away whole once the file is in place. Finishing a file is a rename on the same volume, never a copy, and the finished file gets a `Zone.Identifier` stream with `ZoneId=3`, the mark Windows puts on every download.
 - Before a fetch, free space must cover twice the expected size, because the video part, the audio part and the merged output exist together for a moment.
 - yt-dlp updates run at most daily, in the background after startup, and right away after `EngineOutdated`. The updater downloads the release's `yt-dlp` file, 3 MB of pure Python with yt-dlp-ejs inside, and `SHA2-256SUMS`. It checks the hash, unpacks into a new version folder with zip-slip checks, compiles the bytecode with the bundled Python, runs `--version` from the new folder, and only then switches `state.json`. A release that needs a newer Python fails that check and never goes live. Running jobs finish on the old folder, and the next start deletes it. A nightly channel setting covers weeks when YouTube moves faster than stable releases.
@@ -603,7 +604,7 @@ Everything exists, with `store` keeping only `settings.json`; `queue.json` comes
 
 The `win32` adapter, `pastegrab-setup.exe`, the tutorial, app self-update with rollback, Telegram reports, the VM checklist. Done when his footage sources work in both lab VMs within budget, setup's report arrives in your Telegram, and an update rolls out and back in the lab.
 
-The window runs on the 8.1 VM, installed by the setup: the link box with paste-anywhere and clipboard pickup, the card with title, length, size and profile, the job list with live progress and its menu, the folder picker, and one window per user that takes the links of a second start. The folder and the profile he picks last are kept in `settings.json`. Fades, the tutorial, taskbar progress, the tray balloon and per-monitor DPI come next.
+The window runs on the 8.1 VM, installed by the setup: the link box with paste-anywhere and clipboard pickup, the card with title, length, size and profile, the job list with live progress and its menu, the folder picker, and one window per user that takes the links of a second start. The folder and the profile he picks last are kept in `settings.json`. The taskbar button shows the average progress of the running steps, and Windows doesn't sleep while work runs. Fades, the tutorial, the tray balloon and per-monitor DPI come next.
 
 ### M3 hardening
 
