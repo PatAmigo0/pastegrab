@@ -45,8 +45,27 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::{HSTRING, PCWSTR, PWSTR, w};
 
+use windows::Win32::Foundation::POINT;
+use windows::Win32::System::DataExchange::COPYDATASTRUCT;
+use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VK_CONTROL};
+use windows::Win32::UI::WindowsAndMessaging::{
+    AppendMenuW, CreatePopupMenu, DestroyMenu, GetCursorPos, GetDlgCtrlID, HMENU as MENU,
+    MF_GRAYED, MF_SEPARATOR, MF_STRING, PostMessageW, TPM_RETURNCMD, TPM_RIGHTBUTTON,
+    TrackPopupMenu, WA_INACTIVE, WM_ACTIVATE, WM_APP, WM_CONTEXTMENU, WM_COPYDATA, WM_KEYDOWN,
+};
+
 use super::bridge::{WM_CORE, WinView};
+use super::instance::FORWARD;
 use super::shell;
+
+/// The window class, which a second start looks for.
+pub(super) const CLASS: PCWSTR = w!("pastegrab");
+/// Ctrl+V outside the link box: paste the clipboard as a new link.
+const WM_PASTE_ANYWHERE: u32 = WM_APP + 2;
+const MENU_OPEN: i32 = 1;
+const MENU_FOLDER: i32 = 2;
+const MENU_RETRY: i32 = 3;
+const MENU_CANCEL: i32 = 4;
 use crate::text;
 
 const ID_LINK: i32 = 101;
@@ -86,7 +105,7 @@ pub fn run(core: Handle, view: Arc<WinView>, startup: Startup) -> Result<(), Str
         GetModuleHandleW(None).map_err(|e| e.to_string())?
     };
     let instance = HINSTANCE(instance.0);
-    let class = w!("pastegrab");
+    let class = CLASS;
     let wc = WNDCLASSEXW {
         cbSize: size_u32::<WNDCLASSEXW>(),
         style: CS_HREDRAW | CS_VREDRAW,
@@ -130,6 +149,12 @@ pub fn run(core: Handle, view: Arc<WinView>, startup: Startup) -> Result<(), Str
         let _ = UpdateWindow(hwnd);
         let mut msg = MSG::default();
         while GetMessageW(&raw mut msg, None, 0, 0).0 > 0 {
+            let ctrl = GetKeyState(i32::from(VK_CONTROL.0)) < 0;
+            let paste = msg.message == WM_KEYDOWN && msg.wParam.0 == usize::from(b'V') && ctrl;
+            if paste && GetDlgCtrlID(msg.hwnd) != ID_LINK {
+                let _ = PostMessageW(Some(hwnd), WM_PASTE_ANYWHERE, WPARAM(0), LPARAM(0));
+                continue;
+            }
             if !IsDialogMessageW(hwnd, &raw const msg).as_bool() {
                 let _ = TranslateMessage(&raw const msg);
                 DispatchMessageW(&raw const msg);
@@ -212,6 +237,7 @@ struct Ui {
     card: Cell<Card>,
     notice: Cell<&'static str>,
     link_len: Cell<usize>,
+    clipboard: RefCell<String>,
 }
 
 impl Ui {
@@ -228,6 +254,7 @@ impl Ui {
             card: Cell::new(Card::Hidden),
             notice: Cell::new(""),
             link_len: Cell::new(0),
+            clipboard: RefCell::default(),
         }
     }
 
@@ -249,6 +276,29 @@ impl Ui {
                 return Some(LRESULT(packed.cast_signed()));
             }
             WM_CORE => self.drain(hwnd),
+            WM_ACTIVATE => {
+                if u32::try_from(low(wparam.0)).unwrap_or(0) != WA_INACTIVE {
+                    self.pick_up(hwnd, false);
+                }
+                return None;
+            }
+            WM_PASTE_ANYWHERE => self.pick_up(hwnd, true),
+            WM_CONTEXTMENU if wparam.0 == self.controls().list.0.addr() => self.context_menu(hwnd),
+            WM_COPYDATA => {
+                // SAFETY: WM_COPYDATA's lparam points to a COPYDATASTRUCT valid for this call.
+                let data = unsafe { &*(lparam.0 as *const COPYDATASTRUCT) };
+                if data.dwData == FORWARD && !data.lpData.is_null() {
+                    let units = usize::try_from(data.cbData).unwrap_or(0) / 2;
+                    // SAFETY: the sender's buffer holds `cbData` bytes of UTF-16 for this call.
+                    let text =
+                        unsafe { std::slice::from_raw_parts(data.lpData.cast::<u16>(), units) };
+                    let text = String::from_utf16_lossy(text);
+                    if !text.trim().is_empty() {
+                        self.submit(text);
+                    }
+                }
+                return Some(LRESULT(1));
+            }
             WM_DESTROY => {
                 // SAFETY: ends this thread's message loop.
                 unsafe { PostQuitMessage(0) };
@@ -519,13 +569,17 @@ impl Ui {
             LVN_KEYDOWN => {
                 // SAFETY: LVN_KEYDOWN comes with an NMLVKEYDOWN.
                 let key = unsafe { &*(lparam.0 as *const NMLVKEYDOWN) };
-                if key.wVKey == VK_DELETE.0 {
-                    let c = self.controls();
-                    let id = selected(c.list)
-                        .and_then(|i| self.board.borrow().rows().get(i).map(|row| row.id));
-                    if let Some(id) = id {
+                // SAFETY: a plain query without pointers.
+                let ctrl = unsafe { GetKeyState(i32::from(VK_CONTROL.0)) } < 0;
+                let row = self.selected_row();
+                match (key.wVKey, row) {
+                    (k, Some((id, ..))) if k == VK_DELETE.0 => {
                         let _ = self.core.send(Input::Cancel(id));
                     }
+                    (k, Some((_, Some(file), _))) if ctrl && k == u16::from(b'O') => {
+                        shell::show_in_folder(&file);
+                    }
+                    _ => {}
                 }
             }
             _ => return None,
@@ -636,6 +690,65 @@ impl Ui {
         show(c.title, state != Card::Hidden);
         for control in [c.detail, c.profile, c.download] {
             show(control, state == Card::Shown);
+        }
+    }
+
+    /// Reads the clipboard: on Ctrl+V always, on activation only when its text changed since the
+    /// last look, so returning to the window doesn't add the same link again.
+    fn pick_up(&self, hwnd: HWND, asked: bool) {
+        let Some(text) = shell::clipboard_text(hwnd) else {
+            return;
+        };
+        let seen = *self.clipboard.borrow() == text;
+        self.clipboard.borrow_mut().clone_from(&text);
+        if (asked || !seen) && !analyze(&text).is_empty() {
+            self.submit(text);
+        }
+    }
+
+    fn selected_row(
+        &self,
+    ) -> Option<(
+        pastegrab_domain::job::JobId,
+        Option<PathBuf>,
+        pastegrab_domain::job::JobState,
+    )> {
+        let index = selected(self.controls().list)?;
+        let board = self.board.borrow();
+        let row = board.rows().get(index)?;
+        Some((row.id, row.file.clone(), row.state))
+    }
+
+    fn context_menu(&self, hwnd: HWND) {
+        let Some((id, file, state)) = self.selected_row() else {
+            return;
+        };
+        let file = file.filter(|file| file.exists());
+        let failed = matches!(
+            state,
+            pastegrab_domain::job::JobState::Failed(_) | pastegrab_domain::job::JobState::Cancelled
+        );
+        let menu = &RU.menu;
+        let items = [
+            (MENU_OPEN, menu.open, file.is_some()),
+            (MENU_FOLDER, menu.show_in_folder, file.is_some()),
+            (0, "", false),
+            (MENU_RETRY, menu.retry, failed),
+            (MENU_CANCEL, menu.cancel, !state.is_over()),
+        ];
+        let Some(chosen) = popup(hwnd, &items) else {
+            return;
+        };
+        match (chosen, file) {
+            (MENU_OPEN, Some(file)) => shell::open(&file),
+            (MENU_FOLDER, Some(file)) => shell::show_in_folder(&file),
+            (MENU_RETRY, _) => {
+                let _ = self.core.send(Input::Retry(id));
+            }
+            (MENU_CANCEL, _) => {
+                let _ = self.core.send(Input::Cancel(id));
+            }
+            _ => {}
         }
     }
 
@@ -918,4 +1031,38 @@ fn selected(list: HWND) -> Option<usize> {
         )
     };
     usize::try_from(index.0).ok()
+}
+
+/// Shows a menu at the mouse and returns the chosen item; an id of 0 is a separator.
+fn popup(owner: HWND, items: &[(i32, &str, bool)]) -> Option<i32> {
+    // SAFETY: the menu is created and destroyed here; the item strings outlive each call.
+    unsafe {
+        let menu: MENU = CreatePopupMenu().ok()?;
+        for &(id, text, enabled) in items {
+            if id == 0 {
+                let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
+                continue;
+            }
+            let flags = if enabled {
+                MF_STRING
+            } else {
+                MF_STRING | MF_GRAYED
+            };
+            let text = HSTRING::from(text);
+            let _ = AppendMenuW(menu, flags, usize::try_from(id).unwrap_or(0), &text);
+        }
+        let mut at = POINT::default();
+        let _ = GetCursorPos(&raw mut at);
+        let chosen = TrackPopupMenu(
+            menu,
+            TPM_RETURNCMD | TPM_RIGHTBUTTON,
+            at.x,
+            at.y,
+            None,
+            owner,
+            None,
+        );
+        let _ = DestroyMenu(menu);
+        Some(chosen.0).filter(|&id| id > 0)
+    }
 }

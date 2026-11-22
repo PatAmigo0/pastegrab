@@ -1,8 +1,13 @@
 use std::path::{Path, PathBuf};
 
 use pastegrab_i18n::RU;
-use windows::Win32::Foundation::HWND;
+use windows::Win32::Foundation::{HGLOBAL, HWND};
 use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance, CoTaskMemFree};
+use windows::Win32::System::DataExchange::{
+    CloseClipboard, GetClipboardData, IsClipboardFormatAvailable, OpenClipboard,
+};
+use windows::Win32::System::Memory::{GlobalLock, GlobalUnlock};
+use windows::Win32::System::Ole::CF_UNICODETEXT;
 use windows::Win32::UI::Shell::{
     FILEOPENDIALOGOPTIONS, FOLDERID_Videos, FOS_FORCEFILESYSTEM, FOS_PICKFOLDERS, FileOpenDialog,
     IFileOpenDialog, IShellItem, KF_FLAG_DEFAULT, SHCreateItemFromParsingName,
@@ -11,7 +16,7 @@ use windows::Win32::UI::Shell::{
 use windows::Win32::UI::WindowsAndMessaging::{
     GetSystemMetrics, MB_ICONERROR, MB_OK, MessageBoxW, SM_CYSCREEN, SW_SHOWNORMAL,
 };
-use windows::core::{HSTRING, PWSTR, w};
+use windows::core::{HSTRING, PCWSTR, PWSTR, w};
 
 /// The person's Videos folder.
 #[must_use]
@@ -40,6 +45,45 @@ pub(super) fn open(path: &Path) {
     let path = HSTRING::from(path);
     // SAFETY: the string outlives the call; Windows owns whatever starts.
     unsafe { ShellExecuteW(None, w!("open"), &path, None, None, SW_SHOWNORMAL) };
+}
+
+/// Shows `file` selected in an Explorer window of its folder.
+pub(super) fn show_in_folder(file: &Path) {
+    let select = HSTRING::from(format!("/select,\"{}\"", file.display()));
+    // SAFETY: the strings outlive the call; Windows owns the Explorer it starts.
+    unsafe {
+        ShellExecuteW(
+            None,
+            w!("open"),
+            w!("explorer.exe"),
+            &select,
+            None,
+            SW_SHOWNORMAL,
+        )
+    };
+}
+
+/// The clipboard's text, if it holds any.
+pub(super) fn clipboard_text(owner: HWND) -> Option<String> {
+    let format = u32::from(CF_UNICODETEXT.0);
+    // SAFETY: the clipboard is opened and closed here, and the locked text is copied before the
+    // lock is released.
+    unsafe {
+        IsClipboardFormatAvailable(format).ok()?;
+        OpenClipboard(Some(owner)).ok()?;
+        let text = GetClipboardData(format).ok().and_then(|data| {
+            let memory = HGLOBAL(data.0);
+            let units = GlobalLock(memory).cast::<u16>();
+            if units.is_null() {
+                return None;
+            }
+            let text = PCWSTR(units).to_string().ok();
+            let _ = GlobalUnlock(memory);
+            text
+        });
+        let _ = CloseClipboard();
+        text
+    }
 }
 
 /// Asks for a folder, starting in `start`; `None` when the person cancels.

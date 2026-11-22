@@ -29,6 +29,10 @@ pub fn run() -> ExitCode {
 }
 
 fn start() -> Result<(), String> {
+    let text = env::args().skip(1).collect::<Vec<_>>().join("\n");
+    let Some(_instance) = pastegrab_win32::claim(&text) else {
+        return Ok(());
+    };
     let data = env::var_os("LOCALAPPDATA")
         .map(|dir| PathBuf::from(dir).join("pastegrab"))
         .ok_or("LOCALAPPDATA is unset")?;
@@ -72,7 +76,6 @@ fn start() -> Result<(), String> {
     });
     let view = Arc::new(WinView::default());
     let (core, _) = runtime::start(queue, Arc::new(ports), Arc::clone(&view) as _, false);
-    let text = env::args().skip(1).collect::<Vec<_>>().join("\n");
     pastegrab_win32::run(core, view, Startup { dest, text })
 }
 

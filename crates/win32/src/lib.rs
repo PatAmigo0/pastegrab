@@ -8,4 +8,4 @@ mod text;
 mod sys;
 
 #[cfg(windows)]
-pub use sys::{Startup, WinView, alert, run, screen_height, videos_folder};
+pub use sys::{Instance, Startup, WinView, alert, claim, run, screen_height, videos_folder};
