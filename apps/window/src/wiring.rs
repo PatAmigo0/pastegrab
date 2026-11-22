@@ -8,7 +8,7 @@ use pastegrab_app::ports::{ProcessRunner, SettingsStore};
 use pastegrab_app::queue::{Queue, Settings};
 use pastegrab_app::runtime;
 use pastegrab_app::steps::Ports;
-use pastegrab_deploy::launch;
+use pastegrab_deploy::{launch, machine};
 use pastegrab_domain::job::Permits;
 use pastegrab_domain::plan::Machine;
 use pastegrab_domain::profile::ProfileKind;
@@ -56,9 +56,12 @@ fn start() -> Result<(), String> {
         temp_dir: Some(temp),
         ..Engine::new(sidecars.ytdlp, data.join("cache").join("yt-dlp"))
     };
+    // What setup tuned for this PC; a copy without an install takes the defaults.
+    let tuning = machine::read(&data).map_or_default(|deployment| deployment.tuning);
     let tools = Tools {
         ffmpeg: sidecars.ffmpeg,
         ffprobe: sidecars.ffprobe,
+        x264_preset: tuning.preset.name(),
     };
     let runner: Arc<dyn ProcessRunner> = Arc::new(LocalRunner::new());
     let ytdlp = YtDlp::new(Arc::clone(&runner), engine);
@@ -87,7 +90,10 @@ fn start() -> Result<(), String> {
         },
         dest: dest.clone(),
         data,
-        permits: Permits::DEFAULT,
+        permits: Permits {
+            fetches: usize::from(tuning.downloads),
+            ..Permits::DEFAULT
+        },
     });
     let view = Arc::new(WinView::default());
     let (core, _) = runtime::start(queue, Arc::new(ports), Arc::clone(&view) as _, false);
