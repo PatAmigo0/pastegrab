@@ -141,7 +141,7 @@ pub fn run(core: Handle, view: Arc<WinView>, startup: Startup) -> Result<(), Str
             WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
-            scale(760, dpi),
+            scale(880, dpi),
             scale(560, dpi),
             None,
             None,
@@ -479,7 +479,7 @@ impl Ui {
         );
         // SAFETY: a plain query without pointers.
         let scrollbar = unsafe { GetSystemMetrics(SM_CXVSCROLL) };
-        let state_width = px(330);
+        let state_width = px(330).max(list_width / 2);
         set_column_width(c.list, 0, list_width - state_width - scrollbar - px(4));
         set_column_width(c.list, 1, state_width);
         place(
