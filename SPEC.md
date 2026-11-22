@@ -617,7 +617,7 @@ URL protocol and bookmarklet, drag from the browser, live recording, GIF export,
 | The Tier 3 target breaks on a newer nightly | Stay on the pinned date in `tools/build/rust`. The MSVC win7 target is the second route. |
 | Sites rate-limit the home IP | Browser cookies, per-site backoff, slower playlist pacing. |
 | The Python under yt-dlp needs the UCRT, KB2999226 | His PC has it, by the ProSportsAnalyzer evidence, and setup installs it through the VC++ redistributable where it's missing. Our own binaries need only `msvcrt.dll`. |
-| The lab's traffic leaves through a VPN | YouTube asks VPN exits to sign in far more often than home connections. A YouTube failure in the lab proves nothing until it repeats on a direct connection or on his PC. |
+| The lab's traffic doesn't come from a home connection | YouTube asks shared addresses to sign in far more often than home connections. A YouTube failure in the lab proves nothing until it repeats on a direct connection or on his PC. |
 | olympics.com refuses yt-dlp from a home connection too | His main source would need another route. The Olympics YouTube channel carries much of the same footage, and pastegrab handles YouTube. |
 | A fragment from a site that needs impersonation fails, because ffmpeg downloads sections | The job falls back to the whole stream and cuts it locally, as section 6 says. |
 | Someone extracts the bot token | Spam and bot renames in your chat, and old reports as ciphertext. Revoke it in BotFather and ship a new one in the next release. |
