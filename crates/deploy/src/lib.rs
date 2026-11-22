@@ -5,6 +5,7 @@ pub mod launch;
 #[cfg(windows)]
 mod sys;
 mod unpack;
+pub mod updater;
 
 #[cfg(windows)]
 pub use sys::{Entry, register, unregister};
