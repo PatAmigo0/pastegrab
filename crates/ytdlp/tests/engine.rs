@@ -17,7 +17,7 @@ use pastegrab_domain::link::{Link, analyze};
 use pastegrab_domain::media::{AudioCodec, FormatId, MediaInfo, VideoCodec};
 use pastegrab_domain::plan::{FetchPlan, Machine, plan_fetch};
 use pastegrab_domain::profile::{Container, ProfileKind};
-use pastegrab_testkit::{ScriptedRunner, TempDir, Transcript};
+use pastegrab_testkit::{FakeFetcher, MemFiles, ScriptedRunner, TempDir, Transcript};
 use pastegrab_ytdlp::{Engine, YtDlp};
 
 const YTDLP: &str = "/opt/yt-dlp";
@@ -266,4 +266,50 @@ fn playlists_and_impersonation() {
         !args.contains(&"generic:impersonate".into()),
         "YouTube has its own extractor"
     );
+}
+
+#[test]
+fn a_plain_file_goes_to_the_direct_fetcher_and_yt_dlp_takes_over_when_it_fails() {
+    let dir = TempDir::new("ytdlp-direct").expect("a temp folder");
+    let job = dir.path().join("jobs").join("1");
+    fs::create_dir_all(&job).expect("the job folder");
+    let info = r#"{"formats": [{"format_id": "512kb", "protocol": "https",
+        "url": "https://archive.org/download/Cops1922/Cops1922_512kb.mp4", "http_headers": {}}]}"#;
+    let work = dir.path().join("videos").join(".pastegrab").join("1");
+    let plan = FetchPlan {
+        format_ids: FormatId::parse("512kb").into_iter().collect(),
+        merge_into: None,
+        section: None,
+        expected_bytes: None,
+        encodes_video: false,
+    };
+    let fetch = |direct_answers: Vec<Result<(), Failure>>| {
+        let info_json = job.join("probe.info.json");
+        fs::write(&info_json, info).expect("an info JSON");
+        let media = work.join("Cops1922.mp4");
+        let transcript = Transcript::new(&[], 0)
+            .writes(&media, "media")
+            .writes("result.txt", format!("{}\n", media.display()));
+        let runner = Arc::new(ScriptedRunner::default().script(YTDLP, transcript));
+        let engine = Engine::new(PathBuf::from(YTDLP), dir.path().join("cache"));
+        let direct = FakeFetcher::new(MemFiles::default(), "download.mp4", direct_answers);
+        let ytdlp = YtDlp::with_direct(Arc::clone(&runner) as _, engine, Arc::new(direct));
+        let source = Source::Engine {
+            info_json: info_json.clone(),
+            impersonate: false,
+        };
+        let request = FetchRequest {
+            plan: &plan,
+            source: &source,
+            work_dir: &work,
+        };
+        let file = ytdlp
+            .fetch(request, &Recorder::default(), &Cancel::default())
+            .expect("a fetch");
+        assert!(!info_json.exists(), "the info JSON can hold cookies");
+        (file, runner.calls().len())
+    };
+    assert_eq!(fetch(vec![]), (work.join("download.mp4"), 0));
+    let refused = Failure::new(FailureKind::Network, "403");
+    assert_eq!(fetch(vec![Err(refused)]), (work.join("Cops1922.mp4"), 1));
 }

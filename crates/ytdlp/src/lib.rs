@@ -3,6 +3,7 @@
 
 mod args;
 mod failure;
+mod plain;
 mod progress;
 mod summary;
 
@@ -78,18 +79,63 @@ struct Inner {
     runner: Arc<dyn ProcessRunner>,
     engine: Engine,
     fixed: Vec<OsString>,
+    direct: Option<Arc<dyn Fetcher>>,
 }
 
 impl YtDlp {
     /// Runs `engine` through `runner`.
     #[must_use]
     pub fn new(runner: Arc<dyn ProcessRunner>, engine: Engine) -> Self {
+        Self::build(runner, engine, None)
+    }
+
+    /// As `new`, and hands a plan of one plain https file to `direct`, which can fetch it over
+    /// several connections; yt-dlp takes over when that fails.
+    #[must_use]
+    pub fn with_direct(
+        runner: Arc<dyn ProcessRunner>,
+        engine: Engine,
+        direct: Arc<dyn Fetcher>,
+    ) -> Self {
+        Self::build(runner, engine, Some(direct))
+    }
+
+    fn build(
+        runner: Arc<dyn ProcessRunner>,
+        engine: Engine,
+        direct: Option<Arc<dyn Fetcher>>,
+    ) -> Self {
         let fixed = args::fixed(&engine);
         Self(Arc::new(Inner {
             runner,
             engine,
             fixed,
+            direct,
         }))
+    }
+
+    /// The plan's one plain file through the direct fetcher; `None` lets yt-dlp fetch.
+    fn fetch_direct(
+        &self,
+        request: &FetchRequest<'_>,
+        info_json: &Path,
+        impersonate: bool,
+        progress: &dyn ProgressSink,
+        cancel: &Cancel,
+    ) -> Option<Result<PathBuf, Failure>> {
+        let direct = self.0.direct.as_ref()?;
+        let url = plain::plain_url(request.plan, info_json, impersonate)?;
+        let source = Source::Direct { url };
+        let attempt = FetchRequest {
+            plan: request.plan,
+            source: &source,
+            work_dir: request.work_dir,
+        };
+        match direct.fetch(attempt, progress, cancel) {
+            Ok(file) => Some(Ok(file)),
+            Err(failure) if cancel.is_cancelled() => Some(Err(failure)),
+            Err(_) => None,
+        }
     }
 
     fn run(
@@ -218,6 +264,13 @@ impl Fetcher for YtDlp {
         };
         let work = request.work_dir;
         fs::create_dir_all(work).map_err(|e| io_failure(&e, "creating the work folder"))?;
+        if let Some(fetched) =
+            self.fetch_direct(&request, info_json, *impersonate, progress, cancel)
+        {
+            // With browser login the info JSON carries cookies in every format's headers.
+            let _ = fs::remove_file(info_json);
+            return fetched;
+        }
         let result = work.join(args::RESULT);
         remove_stale(&result)?;
         let expected = request.plan.expected_bytes;
