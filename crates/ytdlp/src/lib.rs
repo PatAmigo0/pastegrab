@@ -178,6 +178,14 @@ impl Resolver for YtDlp {
         self.run(probe, work_dir, cancel, |_| {})?
             .check(Step::Probe, cancel)?;
         let text = fs::read(&summary).map_err(|e| io_failure(&e, "reading the summary"))?;
+        let entries = text
+            .split(|&b| b == b'\n')
+            .filter(|l| !l.is_empty())
+            .count();
+        if entries > 1 {
+            let detail = format!("{entries} videos on one page");
+            return Err(Failure::new(FailureKind::Unsupported, detail));
+        }
         let info =
             summary::parse(&text).map_err(|e| Failure::internal(format!("the summary: {e}")))?;
         Ok(Resolved {

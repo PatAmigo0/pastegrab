@@ -77,6 +77,8 @@ pub(crate) fn probe(link: &Link, job: &Path, impersonate: bool) -> Vec<OsString>
         .flag("--write-info-json")
         .pair("-P", job)
         .pair("-o", "probe")
+        // A missing field prints this placeholder as is, even inside a `j` field.
+        .pair("--output-na-placeholder", "null")
         .pair("--print-to-file", TEMPLATE)
         .0
         .push(SUMMARY.into());

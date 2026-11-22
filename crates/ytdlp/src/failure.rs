@@ -14,6 +14,7 @@ const PATTERNS: &[(&str, FailureKind)] = &[
     ),
     ("[Errno 28]", FailureKind::DiskFull),
     ("No module named", FailureKind::ToolBroken),
+    ("ffmpeg not found", FailureKind::ToolBroken),
     ("Unsupported URL", FailureKind::Unsupported),
     ("This live event will begin", FailureKind::NotStarted),
     ("Premieres in", FailureKind::NotStarted),
@@ -21,18 +22,21 @@ const PATTERNS: &[(&str, FailureKind)] = &[
     ("HTTP Error 429", FailureKind::BotCheck),
     ("Private video", FailureKind::NeedsLogin),
     ("Sign in to confirm your age", FailureKind::NeedsLogin),
+    ("--cookies-from-browser", FailureKind::NeedsLogin),
     ("Video unavailable", FailureKind::Unavailable),
     ("This video is unavailable", FailureKind::Unavailable),
     ("This video has been removed", FailureKind::Unavailable),
     ("available in your country", FailureKind::Unavailable),
     ("HTTP Error 404", FailureKind::Unavailable),
     ("HTTP Error 410", FailureKind::Unavailable),
+    ("Not found.", FailureKind::Unavailable),
     ("Cloudflare anti-bot challenge", FailureKind::BotWall),
     ("Unable to extract", FailureKind::EngineOutdated),
     ("Signature extraction failed", FailureKind::EngineOutdated),
     ("Signature solving failed", FailureKind::EngineOutdated),
     ("n challenge solving failed", FailureKind::EngineOutdated),
     ("Only images are available", FailureKind::EngineOutdated),
+    ("please report this issue", FailureKind::EngineOutdated),
     ("timed out", FailureKind::Network),
     ("Connection reset", FailureKind::Network),
     ("Connection refused", FailureKind::Network),
@@ -137,6 +141,28 @@ mod tests {
                  TransportError('<urlopen error [Errno -3] Temporary failure in name \
                  resolution>'))",
                 FailureKind::Network,
+            ),
+            (
+                "ERROR: [dailymotion] x2iuewm: Not found.",
+                FailureKind::Unavailable,
+            ),
+            (
+                "ERROR: [vimeo] 56015672: The web client only works when logged-in. Use \
+                 --cookies, --cookies-from-browser, --username and --password, --netrc-cmd, or \
+                 --netrc (vimeo) to provide account credentials.",
+                FailureKind::NeedsLogin,
+            ),
+            (
+                "ERROR: [smotrim] 1539617: Failed to parse JSON (caused by \
+                 JSONDecodeError(\"Expecting value in '': line 1 column 1 (char 0)\")); please \
+                 report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q= , filling out \
+                 the appropriate issue template.",
+                FailureKind::EngineOutdated,
+            ),
+            (
+                "ERROR: ffmpeg not found. Please install or provide the path using \
+                 --ffmpeg-location",
+                FailureKind::ToolBroken,
             ),
             ("ERROR: something new", FailureKind::Internal),
         ];

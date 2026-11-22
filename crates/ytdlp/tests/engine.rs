@@ -8,13 +8,13 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use pastegrab_app::Cancel;
 use pastegrab_app::ports::{
-    FetchRequest, Fetcher, Phase, Progress, ProgressSink, Resolver, Source,
+    FetchRequest, Fetcher, Phase, Progress, ProgressSink, Resolved, Resolver, Source,
 };
+use pastegrab_app::{Cancel, Failure};
 use pastegrab_domain::job::FailureKind;
 use pastegrab_domain::link::{Link, analyze};
-use pastegrab_domain::media::FormatId;
+use pastegrab_domain::media::{AudioCodec, FormatId, MediaInfo, VideoCodec};
 use pastegrab_domain::plan::{FetchPlan, Machine, plan_fetch};
 use pastegrab_domain::profile::{Container, ProfileKind};
 use pastegrab_testkit::{ScriptedRunner, TempDir, Transcript};
@@ -79,6 +79,65 @@ fn a_probe_reads_the_summary_and_the_planner_picks_like_youtube_offers() {
     assert_eq!(call.cwd.as_deref(), Some(job.as_path()));
     let tail: [std::ffi::OsString; 2] = ["--".into(), ZOO.into()];
     assert_eq!(call.args[call.args.len() - 2..], tail);
+}
+
+fn probe_recorded(summary: &[u8], url: &str) -> Result<Resolved, Failure> {
+    let dir = TempDir::new("ytdlp-recorded").expect("a temp folder");
+    let transcript = Transcript::new(&[], 0).writes("summary.json", summary);
+    let runner = Arc::new(ScriptedRunner::default().script(YTDLP, transcript));
+    let job = dir.path().join("job");
+    ytdlp(&runner, dir.path()).resolve(&link(url), &job, false, &Cancel::default())
+}
+
+fn video_plan(info: &MediaInfo) -> String {
+    let profile = ProfileKind::Video.profile();
+    plan_fetch(info, &profile, Machine { screen_height: 768 }, None)
+        .expect("a plan")
+        .selector()
+}
+
+#[test]
+fn archive_org_names_no_codecs_and_the_tallest_file_wins() {
+    let info = probe_recorded(
+        include_bytes!("fixtures/archive-cops.summary.json"),
+        "https://archive.org/details/Cops1922",
+    )
+    .expect("a probe")
+    .info;
+    assert_eq!(info.title, "Buster Keaton's \"Cops\" (1922)");
+    let video = info.formats[1].video.expect("a picture");
+    assert_eq!(
+        (video.codec, video.height),
+        (VideoCodec::Unknown, Some(480))
+    );
+    assert_eq!(
+        info.formats[1].audio.map(|a| a.codec),
+        Some(AudioCodec::Unknown)
+    );
+    assert_eq!(video_plan(&info), "1");
+}
+
+#[test]
+fn ok_ru_lists_no_heights_and_the_bigger_file_wins() {
+    let info = probe_recorded(
+        include_bytes!("fixtures/okru.summary.json"),
+        "https://ok.ru/video/1484130554189",
+    )
+    .expect("a probe")
+    .info;
+    assert_eq!(info.title, "Народная забава");
+    assert_eq!(video_plan(&info), "html5-video-high+html5-audio-high");
+}
+
+#[test]
+fn several_videos_on_one_page_wait_for_item_selection() {
+    let failure = probe_recorded(
+        include_bytes!("fixtures/archive-several.summary.json"),
+        "https://archive.org/details/Election_Ads",
+    )
+    .expect_err("several videos");
+    assert_eq!(failure.kind, FailureKind::Unsupported);
+    assert_eq!(failure.detail, "10 videos on one page");
 }
 
 #[test]
