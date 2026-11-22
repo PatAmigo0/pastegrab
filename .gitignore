@@ -1,3 +1,5 @@
 target/
 # Build-time secrets; secrets.toml.tmpl shows the format.
 /secrets.toml
+# Files for this machine only.
+/local/
