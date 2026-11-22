@@ -59,15 +59,17 @@ The killed job left its `.pastegrab-1` folder in the destination. 8.0 hasn't run
 
 **An install of 0.1.0 on the 8.1 VM updated itself to 0.1.1 from a GitHub pre-release.** Started with `PASTEGRAB_RELEASES` pointing at the release, the window fetched `update.json` and its signature over rustls, through GitHub's redirect to its download host, downloaded the 1.5 MB package, checked its SHA-256 and unpacked it into `app\0.1.1`, staged on trial. The next plain start ran `app\0.1.1\pastegrab-app.exe`, whose version info reads 0.1.1, and its window cleared the trial.
 
-The launcher is 412 KB built with `opt-level = "z"`, against 550 KB at the release profile's level 3.
+The launcher is 418 KB built with `opt-level = "z"`, against 550 KB at the release profile's level 3, and `pastegrab-app.exe` is 3.2 MB.
 
 ## Defender
 
-**Defender on 8.1 still gets current definitions, and 8.0's never moves past its install media.** On 2026-11-22 the 8.1 VM updated through Windows Update to engine 1.1.26100.4 and definitions 1.463.414.0. The 8.0 VM stayed at engine 1.1.8502.0 and definitions 1.129.21.0 and reported that no updates were needed. Neither flagged `pgcli.exe`, `qjs.exe` or the packed Python.
+**Defender on 8.1 still gets current definitions, and 8.0's never moves past its install media.** On 2026-11-22 the 8.1 VM updated through Windows Update to engine 1.1.26100.4 and definitions 1.463.414.0. The 8.0 VM stayed at engine 1.1.8502.0 and definitions 1.129.21.0 and reported that no updates were needed. Neither flagged `pgcli.exe`, `qjs.exe` or the packed Python. On 8.1, the full 83 MB `pastegrab-setup.exe` and the installed `pastegrab` folder also scanned clean with exit code 0.
 
 ## Setup
 
-**`pastegrab-setup.exe` installed everything on the 8.1 VM in about two seconds, and the installed tools downloaded a video.** The build carried 57 MB that unpack to 251 MB in 503 files: the standalone Python package, QuickJS, gyan's ffmpeg and ffprobe, and `pgcli.exe` standing in for the window. The task dialog asked «Установить pastegrab?» with the size and folder, showed the progress bar, and ended on «pastegrab установлен». The installed `pgcli.exe` then fetched `jNQXAC9IVRw` with the installed tools only.
+**`pastegrab-setup.exe` installed everything on both VMs, verified every tool and wrote `deploy.json`.** On 8.1 with the UCRT already present, setup skipped UAC, passed every check with yt-dlp in 1.2 s, ffmpeg in 0.3 s, ffprobe in 0.1 s, the one-second x264 encode in 0.1 s and QuickJS in 0.1 s, wrote `deploy.json` with 2 parallel downloads and x264 `superfast`, and showed the full Russian report under «Подробнее о компьютере».
+
+**On 8.0 from `clean`, declining UAC and accepting it on a second run both worked as designed.** When UAC was declined, `SetErrorMode(SEM_FAILCRITICALERRORS)` suppressed Windows' missing-DLL popups; yt-dlp, ffmpeg, ffprobe and x264 exited with `0xc0000135` while QuickJS passed in 0.1 s, setup recorded `ucrt: false` in `deploy.json`, and the last page showed «pastegrab установлен, но часть программы не работает» with the missing-runtime note in the report. Running setup a second time and accepting UAC installed the UCRT, passed all five self-tests and rewrote `deploy.json` with `ucrt: true`.
 
 **Setup adds both shortcuts and the Programs and Features entry, and `--uninstall` takes them back.** On the 8.1 VM reverted to `ucrt`, the last page said «Значок pastegrab появился на рабочем столе и в списке приложений», and «Открыть pastegrab» started the window. The `HKCU` entry listed version 0.1.0, 248,110 KB and `"...\app\pastegrab.exe" --uninstall`. That command asked to close the window while it was open. With the window closed it asked «Удалить pastegrab?», then removed the install folder, the data folder, both shortcuts and the entry. The exe moved itself to `%TEMP%\pastegrab-uninstall-<pid>.exe`, 2.8 MB, and stays there.
 
@@ -75,7 +77,24 @@ A copy carrying the browser's internet mark, opened from Explorer, raised «От
 
 ## Window
 
-**The window, installed by the setup, ran the whole flow on the 8.1 VM.** Started with no arguments, it found a YouTube link on the clipboard and showed the card «Me at the zoo», «youtube.com · 0:19 · около 632 КБ». A second start with an archive.org link handed it to the running window and exited, leaving one process. «Скачать» started both jobs; the list showed «Загрузка 46%, 118 КБ/с» for the direct file, then «Готово» for both. The row menu's «Показать в папке» opened Explorer with the file selected, and Explorer drew thumbnails for both videos.
+**The window, installed by the setup, ran the whole flow on both VMs.** Started with no arguments, it found a YouTube link on the clipboard and showed the card «Me at the zoo», «youtube.com · 0:19 · около 632 КБ». A second start with an archive.org link handed it to the running window and exited, leaving one process. «Скачать» started both jobs; the list showed «Загрузка 46%, 118 КБ/с» for the direct file, then «Готово» for both. The row menu's «Показать в папке» opened Explorer with the file selected, and Explorer drew thumbnails for both videos.
+
+**Per-monitor DPI, inline row actions, «Очистить список» and the five-step tutorial all passed on the VMs.**
+
+- On 8.1, `GetProcessDpiAwareness` reported `PROCESS_PER_MONITOR_DPI_AWARE`, value 2, while `pastegrab-app.exe` carries no static `shcore.dll` import. On 8.0 build 9200, where `shcore.dll` lacks `SetProcessDpiAwareness`, the window fell back to `SetProcessDPIAware()` and ran a full YouTube download.
+- On first start, both VMs opened the five-step tutorial panel, adding five panel controls and four outline strips. On 8.1, Enter stepped from step 1 through step 5 to «Готово» and saved `"tutorial": 1` in `settings.json`; clicking «?» reopened all 9 child windows, and Esc faded them out and destroyed all 9. On 8.0, Esc skipped from step 1, saved `"tutorial": 1` and destroyed all 9 child windows.
+- Active rows showed `×` on the right of the state column, and clicking it on a running `Cops1922` download cancelled the job immediately with no lingering `python.exe`. Finished rows showed «Открыть» and «Папка»; clicking «Папка» on «Me at the zoo» opened Explorer with the file selected. Clicking «Очистить список» dropped both ended rows and disabled the button.
+- Encoding a local MPEG-2 test clip through `pastegrab-app.exe` on 8.1 produced an MP4 whose x264 SEI options `me=dia subme=1 trellis=0 mbtree=0 crf=23.0` matched `superfast` from `deploy.json`.
+- Private memory on 8.1 read 2.5 MB on first launch and 1.8 MB after finishing a YouTube download, against a 15 MB idle budget.
+
+**Warm launch time from `pastegrab.exe` to a visible window stays under the 150 ms budget on both VMs.** Five runs back to back, after one warm-up start, on each VM:
+
+| VM | Five warm runs | Median |
+|---|---|---|
+| `pastegrab-w81`, 8.1, 2 vCPUs, NVMe qcow2 | 77.2, 94.1, 50.9, 77.8, 31.3 ms | 77.2 ms |
+| `pastegrab-w80`, 8.0, 2 vCPUs, NVMe qcow2 | 125.6, 78.4, 77.7, 32.2, 78.4 ms | 78.4 ms |
+
+**Dynamic chunk-stealing split downloads cut archive.org's 164 MB `Cops1922` from 158.4 s to 60.5 s on `pastegrab-w81`.** With four static ranges, one slow connection dragged the tail down to 1.0 MB/s overall. With dynamic 8 MiB down to 2 MiB chunk stealing over four keep-alive connections and a single flush at the end, `pgcli.exe` finished the 164,088,517-byte MP4 in 60.5 s end to end at a 2.9 MB/s download average, peaking at 4.0 MB/s in the window. Over one connection on `pastegrab-w80` the same file ran around 210 KB/s.
 
 **While `Cops1922` downloaded, the taskbar button filled along with its row, both at 29%, and `powercfg /requests` listed `pastegrab.exe` under SYSTEM.** Both cleared when the job reached «Готово».
 
