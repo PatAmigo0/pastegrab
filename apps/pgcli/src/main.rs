@@ -1,7 +1,10 @@
 //! pastegrab on the command line, for development and as a downloader of its own.
 //!
-//! `pgcli [--profile NAME] [--dest DIR] [--screen HEIGHT] [LINK...]` reads links from its
-//! arguments, or from stdin without any, and prints each finished file's path.
+//! `pgcli [--profile NAME] [--dest DIR] [--screen HEIGHT] [--plan] [LINK...]` reads links from
+//! its arguments, or from stdin without any, and prints each finished file's path. `--plan`
+//! prints what the planner picks and downloads nothing.
+
+mod plan;
 
 use std::env;
 use std::ffi::OsString;
@@ -24,7 +27,7 @@ use pastegrab_os::{LocalFiles, LocalRunner};
 use pastegrab_ytdlp::{Engine, YtDlp};
 
 const USAGE: &str = "usage: pgcli [--profile video|best|small|audio|mp3|analysis] [--dest DIR] \
-                     [--screen HEIGHT] [LINK...]";
+                     [--screen HEIGHT] [--plan] [LINK...]";
 
 fn main() -> ExitCode {
     match run() {
@@ -40,6 +43,7 @@ struct Options {
     profile: Option<ProfileKind>,
     dest: PathBuf,
     screen_height: u32,
+    plan: bool,
     links: Vec<String>,
 }
 
@@ -48,6 +52,7 @@ fn options() -> Result<Options, String> {
         profile: None,
         dest: env::current_dir().map_err(|e| format!("the current folder: {e}"))?,
         screen_height: 1080,
+        plan: false,
         links: Vec::new(),
     };
     let mut args = env::args_os().skip(1);
@@ -63,6 +68,7 @@ fn options() -> Result<Options, String> {
                     .and_then(|h| h.parse().ok())
                     .ok_or_else(|| format!("--screen takes a height, not {}", height.display()))?;
             }
+            Some("--plan") => options.plan = true,
             Some("-h" | "--help") => return Err(USAGE.to_owned()),
             Some(link) => options.links.push(link.to_owned()),
             None => return Err(format!("not UTF-8: {}", arg.display())),
@@ -114,6 +120,12 @@ fn run() -> Result<ExitCode, String> {
     let runner: Arc<dyn ProcessRunner> = Arc::new(LocalRunner::new());
     let ytdlp = YtDlp::new(Arc::clone(&runner), engine);
     let ffmpeg = Ffmpeg::new(runner, tools);
+    let machine = Machine {
+        screen_height: options.screen_height,
+    };
+    if options.plan {
+        return Ok(plan::run(&ytdlp, &text, options.profile, machine, &data));
+    }
     let ports = Ports {
         resolvers: vec![Box::new(ytdlp.clone())],
         fetchers: vec![Box::new(ytdlp)],
@@ -123,9 +135,7 @@ fn run() -> Result<ExitCode, String> {
     };
     let queue = Queue::new(Settings {
         profile: ProfileKind::Video,
-        machine: Machine {
-            screen_height: options.screen_height,
-        },
+        machine,
         dest,
         data,
         permits: Permits::DEFAULT,
