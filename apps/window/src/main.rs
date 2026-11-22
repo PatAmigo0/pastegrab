@@ -6,6 +6,8 @@
 #[cfg(windows)]
 mod uninstall;
 #[cfg(windows)]
+mod update;
+#[cfg(windows)]
 mod wiring;
 
 fn main() -> std::process::ExitCode {

@@ -43,6 +43,7 @@ fn start() -> Result<(), String> {
         return Ok(());
     };
     let data = pastegrab_deploy::data_folder().ok_or("LOCALAPPDATA is unset")?;
+    let data_for_update = data.clone();
     let temp = data.join("tmp");
     fs::create_dir_all(&temp).map_err(|e| format!("{}: {e}", temp.display()))?;
     let temp = pastegrab_os::short_path(&temp);
@@ -90,7 +91,11 @@ fn start() -> Result<(), String> {
     });
     let view = Arc::new(WinView::default());
     let (core, _) = runtime::start(queue, Arc::new(ports), Arc::clone(&view) as _, false);
-    pastegrab_win32::run(core, view, Startup { dest, text }, confirm_version)
+    let shown = move || {
+        confirm_version();
+        crate::update::start(data_for_update);
+    };
+    pastegrab_win32::run(core, view, Startup { dest, text }, shown)
 }
 
 /// `tools` beside the `app` folder in an install, or beside the exe in a development copy.
