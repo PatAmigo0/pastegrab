@@ -58,6 +58,17 @@ pub enum Change {
     Nothing,
 }
 
+/// How far the work in hand has come, for the taskbar button and the sleep timer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Activity {
+    /// Nothing runs, and nothing waits for a step that will start on its own.
+    Idle,
+    /// Work runs, and no running step knows its size yet.
+    Busy,
+    /// The running steps that know their size are this many thousandths done, on average.
+    Permille(u16),
+}
+
 /// Every job, oldest first.
 #[derive(Debug, Default)]
 pub struct Board {
@@ -136,6 +147,32 @@ impl Board {
         &self.rows
     }
 
+    /// Steps that run or will start on their own; a job waiting for the download button is idle.
+    #[must_use]
+    pub fn activity(&self) -> Activity {
+        let mut active = false;
+        let (mut sum, mut known) = (0_u64, 0_u64);
+        for row in &self.rows {
+            let pending = matches!(row.state, JobState::Queued | JobState::Fetched);
+            if row.state.running().is_none() && !pending {
+                continue;
+            }
+            active = true;
+            let Some((_, progress)) = row.progress else {
+                continue;
+            };
+            if let Some(total) = progress.total.filter(|&total| total > 0) {
+                sum += progress.done.min(total).saturating_mul(1000) / total;
+                known += 1;
+            }
+        }
+        match (active, known) {
+            (false, _) => Activity::Idle,
+            (true, 0) => Activity::Busy,
+            (true, n) => Activity::Permille(u16::try_from(sum / n).unwrap_or(1000)),
+        }
+    }
+
     /// Probed jobs that wait for the download button, newest first.
     pub fn waiting(&self) -> impl Iterator<Item = &Row> {
         self.rows
@@ -168,7 +205,7 @@ mod tests {
     use pastegrab_domain::plan::PlanError;
     use pastegrab_domain::profile::ProfileKind;
 
-    use super::{Board, Change};
+    use super::{Activity, Board, Change};
     use crate::failure::Failure;
     use crate::ports::{Phase, Progress, ViewUpdate};
 
@@ -244,5 +281,32 @@ mod tests {
             board.progress(JobId(9), Phase::Download, numbers),
             Change::Nothing
         );
+    }
+
+    #[test]
+    fn activity_averages_the_running_steps_and_ignores_held_jobs() {
+        let mut board = Board::default();
+        assert_eq!(board.activity(), Activity::Idle);
+        added(&mut board, 1);
+        assert_eq!(board.activity(), Activity::Busy);
+        state(&mut board, 1, JobState::Ready);
+        assert_eq!(board.activity(), Activity::Idle);
+        added(&mut board, 2);
+        for id in [1, 2] {
+            state(&mut board, id, JobState::Fetching);
+        }
+        assert_eq!(board.activity(), Activity::Busy);
+        let numbers = |done| Progress {
+            done,
+            total: Some(1000),
+            ..Progress::default()
+        };
+        board.progress(JobId(1), Phase::Download, numbers(200));
+        assert_eq!(board.activity(), Activity::Permille(200));
+        board.progress(JobId(2), Phase::Download, numbers(1600));
+        assert_eq!(board.activity(), Activity::Permille(600));
+        state(&mut board, 1, JobState::Done);
+        state(&mut board, 2, JobState::Failed(FailureKind::Network));
+        assert_eq!(board.activity(), Activity::Idle);
     }
 }
