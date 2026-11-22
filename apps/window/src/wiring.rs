@@ -8,6 +8,7 @@ use pastegrab_app::ports::{ProcessRunner, SettingsStore};
 use pastegrab_app::queue::{Queue, Settings};
 use pastegrab_app::runtime;
 use pastegrab_app::steps::Ports;
+use pastegrab_deploy::launch;
 use pastegrab_domain::job::Permits;
 use pastegrab_domain::plan::Machine;
 use pastegrab_domain::profile::ProfileKind;
@@ -15,6 +16,7 @@ use pastegrab_ffmpeg::{Ffmpeg, Tools};
 use pastegrab_http::Direct;
 use pastegrab_os::{LocalFiles, LocalRunner};
 use pastegrab_store::JsonSettings;
+use pastegrab_update::Version;
 use pastegrab_win32::{Startup, WinView};
 use pastegrab_ytdlp::{Engine, YtDlp};
 
@@ -88,19 +90,41 @@ fn start() -> Result<(), String> {
     });
     let view = Arc::new(WinView::default());
     let (core, _) = runtime::start(queue, Arc::new(ports), Arc::clone(&view) as _, false);
-    pastegrab_win32::run(core, view, Startup { dest, text })
+    pastegrab_win32::run(core, view, Startup { dest, text }, confirm_version)
 }
 
 /// `tools` beside the `app` folder in an install, or beside the exe in a development copy.
 fn tools_folder() -> Result<PathBuf, String> {
     let exe = env::current_exe().map_err(|e| e.to_string())?;
-    let here = exe.parent().unwrap_or(Path::new("."));
-    [
-        here.parent().map(|up| up.join("tools")),
-        Some(here.join("tools")),
-    ]
-    .into_iter()
-    .flatten()
-    .find(|dir| dir.is_dir())
-    .ok_or_else(|| format!("no tools folder near {}", exe.display()))
+    let root = launch::root_of(&exe)
+        .or_else(|| exe.parent())
+        .unwrap_or(Path::new("."));
+    let tools = root.join("tools");
+    tools
+        .is_dir()
+        .then_some(tools)
+        .ok_or_else(|| format!("no tools folder near {}", exe.display()))
+}
+
+/// The window opened, which ends this version's trial in the launcher's `state.json`.
+fn confirm_version() {
+    let Ok(exe) = env::current_exe() else {
+        return;
+    };
+    let (Some(root), Ok(own)) = (
+        launch::root_of(&exe),
+        env!("CARGO_PKG_VERSION").parse::<Version>(),
+    ) else {
+        return;
+    };
+    let Some(mut state) = launch::read_state(root) else {
+        return;
+    };
+    let before = state.clone();
+    if state.current() == own {
+        state.confirm();
+    }
+    if state != before {
+        let _ = launch::write_state(root, &state);
+    }
 }

@@ -33,10 +33,7 @@ pub fn run() -> ExitCode {
 fn remove() -> Result<(), String> {
     let exe = env::current_exe().map_err(|e| e.to_string())?;
     let root = pastegrab_deploy::install_folder().ok_or("LOCALAPPDATA is unset")?;
-    let installed = exe
-        .parent()
-        .and_then(Path::parent)
-        .is_some_and(|here| same(here, &root));
+    let installed = pastegrab_deploy::launch::root_of(&exe).is_some_and(|here| same(here, &root));
     if !installed {
         return Err(format!("{} is not in {}", exe.display(), root.display()));
     }
