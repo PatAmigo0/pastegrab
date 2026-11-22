@@ -4,6 +4,7 @@
 
 mod downloads;
 mod magic;
+mod split;
 
 pub use downloads::Downloads;
 
@@ -28,11 +29,26 @@ use magic::{Media, SNIFF_LEN};
 
 const BUFFER: usize = 256 * 1024;
 const REPORT_EVERY: Duration = Duration::from_millis(250);
+/// Files from this size up come in over several connections where the server allows ranges.
+const SPLIT_FROM: u64 = 8 * 1024 * 1024;
+const CONNECTIONS: usize = 4;
 
 /// Media files served as they are.
 #[derive(Debug, Clone)]
 pub struct Direct {
     agent: Agent,
+    connections: usize,
+    split_from: u64,
+}
+
+impl Direct {
+    /// Fetches files from `split_from` bytes up over `connections` connections.
+    #[must_use]
+    pub const fn split_above(mut self, connections: usize, split_from: u64) -> Self {
+        self.connections = connections;
+        self.split_from = split_from;
+        self
+    }
 }
 
 impl Default for Direct {
@@ -44,7 +60,11 @@ impl Default for Direct {
             .user_agent(concat!("pastegrab/", env!("CARGO_PKG_VERSION")))
             .build()
             .into();
-        Self { agent }
+        Self {
+            agent,
+            connections: CONNECTIONS,
+            split_from: SPLIT_FROM,
+        }
     }
 }
 
@@ -97,13 +117,30 @@ impl Fetcher for Direct {
         fs::create_dir_all(work).map_err(|e| io_failure(&e, "creating the work folder"))?;
         let name = format!("download.{}", extension(url));
         let part = work.join(format!("{name}.part"));
-        let mut response = self.agent.get(url).call().map_err(request_failure)?;
+        let mut response = self
+            .agent
+            .get(url)
+            .header("Range", "bytes=0-")
+            .call()
+            .map_err(request_failure)?;
         let total = full_size(&response);
+        let partial = response.status().as_u16() == 206;
         let mut body = response.body_mut().as_reader();
 
         let mut head = [0; SNIFF_LEN];
         let read = read_head(&mut body, &mut head)?;
         magic::sniff(&head[..read]).ok_or_else(not_media)?;
+        if let Some(total) = total.filter(|&total| partial && total >= self.split_from) {
+            let split = split::Split {
+                agent: &self.agent,
+                url,
+                file: &part,
+                total,
+            };
+            let ranges = split::ranges(total, self.connections);
+            split.download(body, &head[..read], &ranges, progress, cancel)?;
+            return finish(work, &name, &part);
+        }
         let mut file = File::create(&part).map_err(|e| io_failure(&e, "creating the file"))?;
         file.write_all(&head[..read])
             .map_err(|e| io_failure(&e, "writing the file"))?;
@@ -134,13 +171,17 @@ impl Fetcher for Direct {
         file.sync_all()
             .map_err(|e| io_failure(&e, "flushing the file"))?;
         drop(file);
-        let finished = work.join(name);
-        fs::rename(&part, &finished).map_err(|e| io_failure(&e, "naming the file"))?;
-        Ok(finished)
+        finish(work, &name, &part)
     }
 }
 
-fn sample(done: u64, total: Option<u64>, started: Instant) -> Progress {
+fn finish(work: &Path, name: &str, part: &Path) -> Result<PathBuf, Failure> {
+    let finished = work.join(name);
+    fs::rename(part, &finished).map_err(|e| io_failure(&e, "naming the file"))?;
+    Ok(finished)
+}
+
+pub(crate) fn sample(done: u64, total: Option<u64>, started: Instant) -> Progress {
     let millis = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
     let speed = done.saturating_mul(1000).checked_div(millis);
     let eta = match (total, speed) {
@@ -252,7 +293,7 @@ fn not_media() -> Failure {
 }
 
 #[expect(clippy::needless_pass_by_value, reason = "used with map_err")]
-fn request_failure(e: ureq::Error) -> Failure {
+pub(crate) fn request_failure(e: ureq::Error) -> Failure {
     let kind = match &e {
         ureq::Error::StatusCode(401 | 403 | 404 | 410) => FailureKind::Unavailable,
         ureq::Error::StatusCode(429) => FailureKind::BotCheck,
@@ -266,7 +307,7 @@ fn request_failure(e: ureq::Error) -> Failure {
     Failure::new(kind, e.to_string())
 }
 
-fn io_failure(e: &io::Error, doing: &str) -> Failure {
+pub(crate) fn io_failure(e: &io::Error, doing: &str) -> Failure {
     let kind = if e.kind() == io::ErrorKind::StorageFull {
         FailureKind::DiskFull
     } else {

@@ -17,7 +17,7 @@ use pastegrab_domain::plan::FetchPlan;
 use pastegrab_http::Direct;
 use pastegrab_testkit::TempDir;
 
-use common::serve;
+use common::{serve, serve_counted};
 
 fn mp4(len: usize) -> Vec<u8> {
     let mut body = b"\0\0\0\x18ftypmp42".to_vec();
@@ -43,6 +43,14 @@ fn fetch(
     url: &str,
     work: &std::path::Path,
 ) -> (Result<std::path::PathBuf, pastegrab_app::Failure>, Last) {
+    fetch_with(&Direct::default(), url, work)
+}
+
+fn fetch_with(
+    direct: &Direct,
+    url: &str,
+    work: &std::path::Path,
+) -> (Result<std::path::PathBuf, pastegrab_app::Failure>, Last) {
     let plan = FetchPlan {
         format_ids: FormatId::parse("direct").into_iter().collect(),
         merge_into: None,
@@ -59,7 +67,7 @@ fn fetch(
         source: &source,
         work_dir: work,
     };
-    let result = Direct::default().fetch(request, &last, &Cancel::default());
+    let result = direct.fetch(request, &last, &Cancel::default());
     (result, last)
 }
 
@@ -129,4 +137,34 @@ fn a_missing_file_is_unavailable() {
         )
         .expect_err("a 404");
     assert_eq!(failure.kind, FailureKind::Unavailable);
+}
+
+#[test]
+fn a_large_file_comes_in_over_four_connections_whole() {
+    let body = mp4(3_000_000);
+    let (base, connections) = serve_counted(body.clone(), 200, 8, true);
+    let dir = TempDir::new("http-split").expect("a temp folder");
+    let direct = Direct::default().split_above(4, 1_000_000);
+    let (file, last) = fetch_with(&direct, &format!("{base}/clip.mp4"), dir.path());
+    assert_eq!(
+        std::fs::read(file.expect("a file")).expect("the file"),
+        body
+    );
+    assert_eq!(connections.load(std::sync::atomic::Ordering::SeqCst), 4);
+    let last = last.0.lock().expect("reports").expect("a report");
+    assert_eq!((last.done, last.total), (3_000_000, Some(3_000_000)));
+}
+
+#[test]
+fn a_server_that_ignores_ranges_serves_the_file_over_one_connection() {
+    let body = mp4(3_000_000);
+    let (base, connections) = serve_counted(body.clone(), 200, 8, false);
+    let dir = TempDir::new("http-whole").expect("a temp folder");
+    let direct = Direct::default().split_above(4, 1_000_000);
+    let (file, _) = fetch_with(&direct, &format!("{base}/clip.mp4"), dir.path());
+    assert_eq!(
+        std::fs::read(file.expect("a file")).expect("the file"),
+        body
+    );
+    assert_eq!(connections.load(std::sync::atomic::Ordering::SeqCst), 1);
 }
