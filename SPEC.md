@@ -2,7 +2,7 @@
 
 **A desktop app for Windows 8.x that takes any pasted text with a link in it and saves the video, or only its audio, as a file that machine can play.** One non-technical person uses it, mostly for old Olympic and other sports footage that he studies in ProSportsAnalyzer. You maintain it from a distance.
 
-The link pipeline and the format planner exist in `crates/domain`. M0 ran in both lab VMs, and `docs/platform.md` holds its measurements. Section 1 lists the choices and section 15 the open questions. The test VMs live in `lab/`, described in section 11.
+`pgcli`, M1's command line, downloads and converts on Linux and on the 8.1 VM. `docs/platform.md` holds the Windows measurements and `docs/corpus.md` the results per site. Section 1 lists the choices and section 15 the open questions. The test VMs live in `lab/`, described in section 11.
 
 ## 1. Decisions
 
@@ -102,7 +102,7 @@ pastegrab/
 |---|---|---|
 | Single responsibility | A module owns one decision. `ytdlp` turns yt-dlp's text into a `FailureKind`; `app` decides what to do about that kind. | Crate split, review |
 | Open/closed | Site hints, output profiles and error patterns are rows in static tables. Engines are `Resolver` and `Fetcher` implementations registered in `apps/*`. Adding either never edits a `match` in `app`. | Review |
-| Liskov substitution | Every port has a contract suite in `testkit`, and every implementation, fakes included, runs it. A resolver must return `Unsupported` for links outside its business, because the resolver chain advances only on that kind. | `cargo test` |
+| Liskov substitution | Every port has a contract suite in `testkit`, and every implementation, fakes included, runs it. `accepts` is an offline check, and the first resolver or fetcher that accepts a link or source gets it. | `cargo test` |
 | Interface segregation | A port has at most three methods. The UI receives `ViewUpdate`s and never sees domain types. | Review |
 | Dependency inversion | `domain` and `app` define the traits and never touch Windows, files, sockets or processes. | `cargo-deny`, `clippy.toml` |
 
@@ -255,6 +255,7 @@ Selection:
 5. Ties go to the codec that is cheaper to decode, VP9 before AV1 on an old CPU, then to the smaller file.
 6. The plan names exact format ids such as `137+140`. A selector string would let yt-dlp choose again at fetch time, and the plan would stop being testable. Ids pass through a `FormatId` type that allows letters, digits, `.`, `_`, `-` and `=`, and refuses selector words such as `all` or `best`, which a site could otherwise use as a format's name.
 7. When the best video has no sound and no audio-only format exists, a format that carries both wins over it. A source with no sound anywhere stays a silent video.
+8. A video without a height, as OK.ru lists them, ranks by its size, and the bigger file wins.
 
 The "Auto" height cap is the largest of 360, 480, 720, 1080, 1440 and 2160 that fits the screen. A 1366×768 laptop gets 720p.
 
@@ -287,7 +288,7 @@ yt-dlp <fixed flags> --no-playlist --no-simulate --skip-download --write-info-js
        -- "<url>"
 ```
 
-For YouTube the full info JSON is large, since it lists every format URL and caption track. It stays on disk. pastegrab reads only `summary.json`, a few kilobytes built with a `%(...)j` template over the fields the planner needs; `j` writes JSON with non-ASCII characters escaped, which no code page can damage. Playlists add `--flat-playlist` and get one summary line per entry. Entries are probed one at a time as their turn comes, and a 300-item playlist never starts 300 probes. Each entry URL the site supplies goes through the link pipeline first, so an entry can't bring in a scheme other than http(s).
+For YouTube the full info JSON is large, since it lists every format URL and caption track. It stays on disk. pastegrab reads only `summary.json`, a few kilobytes built with a `%(...)j` template over the fields the planner needs; `j` writes JSON with non-ASCII characters escaped, which no code page can damage. `--output-na-placeholder null` covers a field the site leaves out, which yt-dlp otherwise prints as a bare `NA` even inside `j`. Until playlists arrive in M3, a page that holds several videos, such as an archive.org collection, fails as unsupported. Playlists add `--flat-playlist` and get one summary line per entry. Entries are probed one at a time as their turn comes, and a 300-item playlist never starts 300 probes. Each entry URL the site supplies goes through the link pipeline first, so an entry can't bring in a scheme other than http(s).
 
 Fetch:
 
@@ -311,7 +312,7 @@ Fixed flags, every one present in `yt-dlp --help` of 2026.10.26:
 --progress-template "download:@pg|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s"
 --progress-template "postprocess:@pp|%(progress.postprocessor)s|%(progress.status)s"
 --encoding utf-8 --windows-filenames
---downloader-args "ffmpeg_i:-tls_verify 1 -ca_file <tools>\python\<version>\Lib\site-packages\certifi\cacert.pem"
+--downloader-args "ffmpeg_i:-tls_verify 1 -ca_file <tools>\python\<version>\site-packages\certifi\cacert.pem"
 -N 4 --retries 10 --fragment-retries 10
 ```
 
@@ -592,6 +593,8 @@ Still open:
 ### M1 core on Linux
 
 `domain`, `app`, `ytdlp`, `ffmpeg`, `http`, `store` and the CLI. Done when the CLI downloads and converts every corpus link on Linux and every contract suite passes.
+
+Everything but `store` exists. `pgcli` downloads and converts from YouTube, VK, Rutube, OK.ru and archive.org on Linux, and `pgcli.exe` does the same on the 8.1 VM with the bundled tools, as `docs/platform.md` records. `pgcli --plan` probes a link and prints the planner's pick without downloading. Contract suites exist for `Files` and `ProcessRunner`.
 
 ### M2 Windows UI
 

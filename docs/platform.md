@@ -40,6 +40,19 @@ Every check passed on both VMs, for all three packages.
 
 The probe's layered child failed on 8.0 until its manifest listed Windows 8 under `supportedOS`. Windows 8 creates layered child windows only for programs that declare it.
 
+## pastegrab on 8.1
+
+**`pgcli.exe` ran pastegrab's own pipeline on the 8.1 VM with the standalone package, QuickJS and gyan's ffmpeg.** The pinned nightly built it for `x86_64-win7-windows-gnu` at 2.7 MB, importing only ADVAPI32, bcrypt, kernel32, msvcrt, ntdll and WS2_32.
+
+| Check | 8.1 |
+|---|---|
+| YouTube `jNQXAC9IVRw` and an archive.org MP4 from one paste into `Videos\Проверка`, 12 s for both | pass |
+| `Zone.Identifier` with `ZoneId=3` on each finished file | pass |
+| MP3 through ffmpeg, and the MKV profile | pass |
+| Killing `pgcli.exe` mid-download ends yt-dlp's `python.exe` through the job object | pass |
+
+The killed job left its `.pastegrab-1` folder in the destination. 8.0 hasn't run it yet.
+
 ## YouTube's JS check
 
 **QuickJS 2026-06-04 solves YouTube's challenge in about 4.3 s on these VMs, QuickJS-NG in about 5.2 s.** The 8.0 runs shared the host with the 8.1 VM and took up to 5.7 and 7.8 s. yt-dlp kept nothing between runs, and a second probe of the same video paid the full time again. pastegrab ships Bellard's QuickJS and keeps the probe's info JSON for the fetch, which solves the challenge once per video.
