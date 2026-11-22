@@ -36,7 +36,9 @@ struct Saved {
 impl SettingsStore for JsonSettings {
     fn load(&self) -> Option<Choices> {
         let text = fs::read(&self.path).ok()?;
-        let saved: Saved = serde_json::from_slice(&text).ok()?;
+        // Notepad on Windows 8 saves UTF-8 with a byte order mark.
+        let json = text.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&text);
+        let saved: Saved = serde_json::from_slice(json).ok()?;
         Some(Choices {
             dest: saved.dest,
             profile: saved.profile.as_deref().and_then(profile),
@@ -94,6 +96,7 @@ mod tests {
     use std::fs;
 
     use pastegrab_app::ports::SettingsStore;
+    use pastegrab_domain::profile::ProfileKind;
     use pastegrab_testkit::{TempDir, contract};
 
     use super::JsonSettings;
@@ -113,9 +116,14 @@ mod tests {
         fs::write(&path, "{ half").expect("a write");
         assert_eq!(JsonSettings::new(path.clone()).load(), None);
         fs::write(&path, r#"{"profile": "8k"}"#).expect("a write");
-        let unknown = JsonSettings::new(path)
+        let unknown = JsonSettings::new(path.clone())
             .load()
             .expect("the rest still reads");
         assert_eq!(unknown.profile, None);
+        fs::write(&path, "\u{feff}{\"profile\": \"mp3\"}").expect("a write");
+        let marked = JsonSettings::new(path)
+            .load()
+            .expect("a byte order mark is fine");
+        assert_eq!(marked.profile, Some(ProfileKind::AudioMp3));
     }
 }
