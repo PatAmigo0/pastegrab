@@ -1,0 +1,31 @@
+{
+    "programs": [
+
+    ],
+    "stream_groups": [
+
+    ],
+    "streams": [
+        {
+            "codec_name": "vp9",
+            "codec_type": "video",
+            "height": 240,
+            "field_order": "progressive",
+            "avg_frame_rate": "30000/1001",
+            "disposition": {
+                "attached_pic": 0
+            }
+        },
+        {
+            "codec_name": "opus",
+            "codec_type": "audio",
+            "avg_frame_rate": "0/0",
+            "disposition": {
+                "attached_pic": 0
+            }
+        }
+    ],
+    "format": {
+        "format_name": "matroska,webm"
+    }
+}

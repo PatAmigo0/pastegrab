@@ -417,6 +417,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "pastegrab-ffmpeg"
+version = "0.1.0"
+dependencies = [
+ "pastegrab-app",
+ "pastegrab-domain",
+ "pastegrab-testkit",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "pastegrab-os"
 version = "0.1.0"
 dependencies = [
