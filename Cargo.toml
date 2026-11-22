@@ -43,3 +43,8 @@ overflow-checks = true
 # A worker panic fails one job instead of every download.
 panic = "unwind"
 strip = true
+
+# The launcher starts before everything else, so it trades speed for size.
+[profile.size]
+inherits = "release"
+opt-level = "z"
