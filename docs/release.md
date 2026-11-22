@@ -12,7 +12,7 @@
 
 1. `just package` builds the setup, the update package `pastegrab-app-<version>-x86_64.tar.zst` and its `update.json`, which names the package's URL, SHA-256 and size and expires a year later, in `target/dist/<version>/`.
 2. `just sign` signs `update.json` with the release key and asks for its password.
-3. `just publish` creates the GitHub release with all four files. Every install checks `releases/latest/download/update.json` once a day, so a published release reaches him within a day of his next start.
+3. `just publish` creates the GitHub release with all four files. Every install checks `releases/latest/download/update.json` once a day. A published release reaches him within a day of his next start.
 
 An update replaces only `app\<version>\`. The launcher and the tools change only through a new setup.
 
