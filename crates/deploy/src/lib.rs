@@ -4,6 +4,7 @@
 mod files;
 pub mod launch;
 pub mod machine;
+pub mod selftest;
 #[cfg(windows)]
 mod sys;
 mod unpack;
@@ -50,6 +51,8 @@ pub struct Sidecars {
     pub ffmpeg: PathBuf,
     /// ffprobe.
     pub ffprobe: PathBuf,
+    /// `QuickJS`, when it ships with pastegrab.
+    pub qjs: Option<PathBuf>,
     /// The CA bundle ffmpeg checks certificates against.
     pub ca_file: Option<PathBuf>,
 }
@@ -76,6 +79,7 @@ pub fn bundled(dir: &Path) -> Result<Sidecars, String> {
         ytdlp: python,
         ytdlp_args: vec!["-I".into(), "-m".into(), "yt_dlp".into()],
         js_runtime: Some(runtime),
+        qjs: Some(qjs),
         ffmpeg_dir: dir.join("ffmpeg"),
         ffmpeg,
         ffprobe,
@@ -95,6 +99,7 @@ pub fn from_path() -> Result<Sidecars, String> {
         ytdlp: find("yt-dlp")?,
         ytdlp_args: Vec::new(),
         js_runtime: None,
+        qjs: None,
         ffmpeg_dir: ffmpeg.parent().map_or_default(Path::to_owned),
         ffprobe: find("ffprobe")?,
         ffmpeg,
