@@ -2,6 +2,7 @@
 
 use pastegrab_app::board::Row;
 use pastegrab_app::ports::{Phase, Progress};
+use pastegrab_app::tutorial::Prompt;
 use pastegrab_domain::job::{FailureKind, JobState};
 use pastegrab_domain::plan::PlanError;
 use pastegrab_i18n::Strings;
@@ -130,6 +131,18 @@ const fn no_plan(reason: PlanError, s: &Strings) -> &'static str {
     }
 }
 
+/// The body text for a tutorial step.
+pub(crate) const fn tutorial_prompt(prompt: Prompt, s: &Strings) -> &'static str {
+    let steps = &s.tutorial.steps;
+    match prompt {
+        Prompt::Clipboard => steps[0],
+        Prompt::Paste => steps[1],
+        Prompt::Choose => steps[2],
+        Prompt::List => steps[3],
+        Prompt::Folder => steps[4],
+    }
+}
+
 fn host(url: &str) -> &str {
     let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
     let host = rest.split(['/', '?', '#']).next().unwrap_or(rest);
@@ -143,13 +156,14 @@ mod tests {
     use pastegrab_app::Failure;
     use pastegrab_app::board::Row;
     use pastegrab_app::ports::{Phase, Progress};
+    use pastegrab_app::tutorial::STEPS;
     use pastegrab_domain::job::{FailureKind, JobId, JobState};
     use pastegrab_domain::media::FormatId;
     use pastegrab_domain::plan::{FetchPlan, PlanError};
     use pastegrab_domain::profile::ProfileKind;
     use pastegrab_i18n::RU;
 
-    use super::{card_detail, card_title, notice, state};
+    use super::{card_detail, card_title, notice, state, tutorial_prompt};
 
     fn row(state: JobState) -> Row {
         Row {
@@ -233,5 +247,13 @@ mod tests {
             notice(&row(JobState::Failed(FailureKind::Network)), &RU),
             None
         );
+    }
+
+    #[test]
+    fn every_tutorial_step_maps_to_non_empty_text() {
+        for (i, step) in STEPS.iter().enumerate() {
+            assert_eq!(tutorial_prompt(step.prompt, &RU), RU.tutorial.steps[i]);
+            assert_ne!(tutorial_prompt(step.prompt, &RU), "");
+        }
     }
 }

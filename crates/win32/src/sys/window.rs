@@ -7,6 +7,7 @@ use pastegrab_app::board::{Board, Change, Row};
 use pastegrab_app::ports::ViewUpdate;
 use pastegrab_app::queue::{Input, Paste};
 use pastegrab_app::runtime::Handle;
+use pastegrab_app::tutorial::{self as guide, Target};
 use pastegrab_domain::link::analyze;
 use pastegrab_domain::profile::ProfileKind;
 use pastegrab_i18n::RU;
@@ -54,7 +55,7 @@ use windows::Win32::UI::Controls::{
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VK_CONTROL};
 use windows::Win32::UI::WindowsAndMessaging::{
-    AppendMenuW, CreatePopupMenu, DestroyMenu, GetCursorPos, GetDlgCtrlID, HMENU as MENU,
+    AppendMenuW, CreatePopupMenu, DestroyMenu, GetCursorPos, GetDlgCtrlID, HMENU as MENU, IDCANCEL,
     MF_GRAYED, MF_SEPARATOR, MF_STRING, PostMessageW, SWP_NOACTIVATE, SWP_NOZORDER, SetWindowPos,
     TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, WA_INACTIVE, WM_ACTIVATE, WM_APP,
     WM_CONTEXTMENU, WM_COPYDATA, WM_DPICHANGED, WM_KEYDOWN, WM_TIMER,
@@ -68,6 +69,7 @@ use super::rows::{self, RowFades, RowHeight};
 use super::shell;
 use super::taskbar::Taskbar;
 use super::tray::{Tray, WM_TRAY};
+use super::tutorial::{self, Guide};
 use crate::cell::{RowAction, scale};
 
 /// The window class, which a second start looks for.
@@ -90,6 +92,7 @@ const ID_LIST: i32 = 107;
 const ID_FOLDER: i32 = 108;
 const ID_CHANGE: i32 = 109;
 const ID_CLEAR: i32 = 110;
+const ID_HELP: i32 = 111;
 
 /// What the window starts with.
 #[derive(Debug, Clone)]
@@ -98,6 +101,8 @@ pub struct Startup {
     pub dest: PathBuf,
     /// Links from the command line, analyzed as soon as the window shows.
     pub text: String,
+    /// The highest tutorial version the person already saw.
+    pub tutorial_seen: u32,
 }
 
 /// Shows the window, calls `shown` once it is on screen, and runs its message loop until the
@@ -218,6 +223,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
 struct Controls {
     link: HWND,
     analyze: HWND,
+    help: HWND,
     title: HWND,
     detail: HWND,
     profile: HWND,
@@ -249,6 +255,14 @@ impl Controls {
                 tab | BS_PUSHBUTTON as u32,
                 false,
                 ID_ANALYZE,
+            ),
+            help: child(
+                hwnd,
+                w!("BUTTON"),
+                RU.help,
+                tab | BS_PUSHBUTTON as u32,
+                false,
+                ID_HELP,
             ),
             title: child(hwnd, w!("STATIC"), "", label, false, ID_TITLE),
             detail: child(hwnd, w!("STATIC"), "", label, false, ID_DETAIL),
@@ -352,6 +366,7 @@ struct Ui {
     row_fades: RowFades,
     button_widths: Cell<(i32, i32)>,
     row_height: RefCell<Option<RowHeight>>,
+    guide: Guide,
 }
 
 impl Ui {
@@ -375,6 +390,7 @@ impl Ui {
             row_fades: RowFades::default(),
             button_widths: Cell::new((64, 48)),
             row_height: RefCell::new(None),
+            guide: Guide::new(startup.tutorial_seen),
         }
     }
 
@@ -400,7 +416,12 @@ impl Ui {
             WM_CORE => self.drain(hwnd),
             created if created == self.taskbar.created() => self.taskbar.attach(hwnd),
             WM_TRAY => self.tray.message(hwnd, lparam),
-            WM_TIMER if wparam.0 == fade::TIMER => self.fade.tick(hwnd),
+            WM_TIMER if wparam.0 == fade::TIMER => {
+                let ended = self.fade.tick(hwnd);
+                if ended.contains(&fade::TUTORIAL) && self.guide.finish_close() {
+                    self.layout(hwnd);
+                }
+            }
             WM_TIMER if wparam.0 == rows::TIMER => {
                 let board = self.board.borrow();
                 self.row_fades
@@ -431,6 +452,7 @@ impl Ui {
                 return Some(LRESULT(1));
             }
             WM_DESTROY => {
+                self.guide.clear();
                 self.tray.remove(hwnd);
                 // SAFETY: ends this thread's message loop.
                 unsafe { PostQuitMessage(0) };
@@ -444,6 +466,7 @@ impl Ui {
         *self.controls.get().unwrap_or(&Controls {
             link: HWND::default(),
             analyze: HWND::default(),
+            help: HWND::default(),
             title: HWND::default(),
             detail: HWND::default(),
             profile: HWND::default(),
@@ -461,9 +484,10 @@ impl Ui {
         let controls = Controls::new(hwnd);
         let _ = self.controls.set(controls);
         let next_fonts = fonts(dpi);
-        self.apply_fonts(next_fonts.normal, next_fonts.bold);
+        let (normal, bold) = (next_fonts.normal, next_fonts.bold);
+        self.apply_fonts(normal, bold);
         self.button_widths
-            .set(rows::measure_buttons(controls.list, next_fonts.normal));
+            .set(rows::measure_buttons(controls.list, normal));
         let _ = self.fonts.replace(Some(next_fonts));
         let _ = self
             .row_height
@@ -478,6 +502,7 @@ impl Ui {
         }
         self.show_folder();
         self.refresh_card(hwnd);
+        self.guide.open_if_needed(hwnd, normal, bold, &self.fade);
         self.view.attach(hwnd);
         let startup = self.startup.borrow_mut().take();
         if let Some(text) = startup {
@@ -488,11 +513,13 @@ impl Ui {
     fn apply_fonts(&self, normal: HFONT, bold: HFONT) {
         let c = self.controls();
         for control in [
-            c.link, c.analyze, c.detail, c.profile, c.download, c.list, c.folder, c.change, c.clear,
+            c.link, c.analyze, c.help, c.detail, c.profile, c.download, c.list, c.folder, c.change,
+            c.clear,
         ] {
             set_font(control, normal);
         }
         set_font(c.title, bold);
+        self.guide.apply_fonts(normal, bold);
     }
 
     fn dpi_changed(&self, hwnd: HWND, wparam: WPARAM, lparam: LPARAM) {
@@ -534,15 +561,20 @@ impl Ui {
         let _ = unsafe { GetClientRect(hwnd, &raw mut client) };
         let (width, height) = (client.right, client.bottom);
         let (margin, gap, tall, button, wide) = (px(16), px(8), px(32), px(104), px(150));
-        place(
-            c.link,
-            margin,
-            margin,
-            width - 2 * margin - gap - button,
-            tall,
-        );
-        place(c.analyze, width - margin - button, margin, button, tall);
+        let help_x = width - margin - tall;
+        let analyze_x = help_x - gap - button;
+        let link_w = analyze_x - gap - margin;
+        place(c.link, margin, margin, link_w, tall);
+        place(c.analyze, analyze_x, margin, button, tall);
+        place(c.help, help_x, margin, tall, tall);
+        let link_rect = RECT {
+            left: margin,
+            top: margin,
+            right: margin + link_w,
+            bottom: margin + tall,
+        };
         let mut top = margin + tall + px(12);
+        let mut card_rect = None;
         match self.card.get() {
             Card::Hidden => {}
             Card::Notice => {
@@ -552,34 +584,59 @@ impl Ui {
             Card::Shown => {
                 place(c.title, margin, top, width - 2 * margin, px(26));
                 place(c.detail, margin, top + px(28), width - 2 * margin, px(22));
-                place(c.profile, margin, top + px(56), px(340), tall + px(220));
-                place(c.download, width - margin - wide, top + px(56), wide, tall);
-                top += px(56) + tall + px(12);
+                let row = top + px(56);
+                place(c.profile, margin, row, px(340), tall + px(220));
+                place(c.download, width - margin - wide, row, wide, tall);
+                card_rect = Some(RECT {
+                    left: margin,
+                    top: row,
+                    right: width - margin,
+                    bottom: row + tall,
+                });
+                top = row + tall + px(12);
             }
         }
-        let bottom = height - margin - tall;
+        let guide_h = self.guide.height(dpi);
+        let guide_gap = if guide_h > 0 { gap } else { 0 };
+        let bottom = height - margin - guide_h - guide_gap - tall;
         let list_width = width - 2 * margin;
-        place(
-            c.list,
-            margin,
+        let list_height = (bottom - gap - top).max(px(80));
+        place(c.list, margin, top, list_width, list_height);
+        let list_rect = RECT {
+            left: margin,
             top,
-            list_width,
-            (bottom - gap - top).max(px(80)),
-        );
+            right: margin + list_width,
+            bottom: top + list_height,
+        };
         // SAFETY: a plain query without pointers.
         let scrollbar = unsafe { GetSystemMetrics(SM_CXVSCROLL) };
         let state_width = px(330).max(list_width / 2);
         set_column_width(c.list, 0, list_width - state_width - scrollbar - px(4));
         set_column_width(c.list, 1, state_width);
         place(c.clear, margin, bottom, wide, tall);
+        let folder_x = margin + wide + px(12);
         place(
             c.folder,
-            margin + wide + px(12),
+            folder_x,
             bottom,
             width - 2 * margin - 2 * gap - button - wide,
             tall,
         );
         place(c.change, width - margin - button, bottom, button, tall);
+        let folder_rect = RECT {
+            left: folder_x,
+            top: bottom,
+            right: width - margin,
+            bottom: bottom + tall,
+        };
+        let target = match self.guide.target() {
+            Target::None => None,
+            Target::Link => Some(link_rect),
+            Target::Card => card_rect,
+            Target::List => Some(list_rect),
+            Target::Folder => Some(folder_rect),
+        };
+        self.guide.layout(width, bottom + tall + gap, dpi, target);
     }
 
     fn command(&self, hwnd: HWND, id: i32, code: u32) {
@@ -624,6 +681,26 @@ impl Ui {
                 let _ = self.core.send(Input::DefaultProfile(profile));
             }
             (ID_CLEAR, BN_CLICKED) => self.clear_ended(),
+            (ID_HELP, BN_CLICKED) => {
+                if let Some((normal, bold)) =
+                    self.fonts.borrow().as_ref().map(|f| (f.normal, f.bold))
+                {
+                    self.guide.replay(hwnd, normal, bold, &self.fade);
+                    self.layout(hwnd);
+                }
+            }
+            (tutorial::ID_NEXT, BN_CLICKED) => {
+                if self.guide.next(hwnd, &self.fade) {
+                    let _ = self.core.send(Input::TutorialSeen(guide::VERSION));
+                }
+                self.layout(hwnd);
+            }
+            (id, BN_CLICKED) if id == tutorial::ID_SKIP || id == IDCANCEL.0 => {
+                if self.guide.skip(hwnd, &self.fade) {
+                    let _ = self.core.send(Input::TutorialSeen(guide::VERSION));
+                    self.layout(hwnd);
+                }
+            }
             (ID_CHANGE, BN_CLICKED) => {
                 let start = self.dest.borrow().clone();
                 if let Some(folder) = shell::pick_folder(hwnd, &start) {
@@ -763,6 +840,8 @@ impl Ui {
             ID_ANALYZE
         } else if self.card.get() == Card::Shown {
             ID_DOWNLOAD
+        } else if self.guide.is_open() {
+            tutorial::ID_NEXT
         } else {
             0
         }
@@ -914,10 +993,12 @@ impl Ui {
         enable(c.download, can_download);
         if before == Card::Hidden {
             match state {
-                Card::Shown => self
-                    .fade
-                    .show(hwnd, &[c.title, c.detail, c.profile, c.download]),
-                Card::Notice => self.fade.show(hwnd, &[c.title]),
+                Card::Shown => self.fade.show(
+                    hwnd,
+                    fade::CARD,
+                    &[c.title, c.detail, c.profile, c.download],
+                ),
+                Card::Notice => self.fade.show(hwnd, fade::CARD, &[c.title]),
                 Card::Hidden => {}
             }
         }

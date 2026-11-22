@@ -84,6 +84,7 @@ fn start() -> Result<(), String> {
         .or_else(pastegrab_win32::videos_folder)
         .or_else(|| env::home_dir().map(|home| home.join("Videos")))
         .ok_or("no Videos folder")?;
+    let tutorial_seen = choices.tutorial.unwrap_or(0);
     let queue = Queue::new(Settings {
         profile: choices.profile.unwrap_or(ProfileKind::Video),
         machine: Machine {
@@ -95,7 +96,7 @@ fn start() -> Result<(), String> {
             fetches: usize::from(tuning.downloads),
             ..Permits::DEFAULT
         },
-        tutorial: choices.tutorial.unwrap_or(0),
+        tutorial: tutorial_seen,
     });
     let view = Arc::new(WinView::default());
     let (core, _) = runtime::start(queue, Arc::new(ports), Arc::clone(&view) as _, false);
@@ -103,7 +104,16 @@ fn start() -> Result<(), String> {
         confirm_version();
         crate::update::start(data_for_update);
     };
-    pastegrab_win32::run(core, view, Startup { dest, text }, shown)
+    pastegrab_win32::run(
+        core,
+        view,
+        Startup {
+            dest,
+            text,
+            tutorial_seen,
+        },
+        shown,
+    )
 }
 
 /// `tools` beside the `app` folder in an install, or beside the exe in a development copy.

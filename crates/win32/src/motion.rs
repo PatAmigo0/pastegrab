@@ -11,6 +11,11 @@ pub(crate) fn opacity(elapsed: u64) -> u8 {
     u8::try_from(255 - remaining).unwrap_or(u8::MAX)
 }
 
+/// Opacity from 255 down to 0, `elapsed` milliseconds into a fade-out.
+pub(crate) fn opacity_out(elapsed: u64) -> u8 {
+    u8::MAX - opacity(elapsed)
+}
+
 /// Blends two Win32 `0x00BBGGRR` colors: `alpha == 0` gives `from`, `alpha == 255` gives `to`.
 pub(crate) const fn blend(from: u32, to: u32, alpha: u8) -> u32 {
     const fn channel(from: u32, to: u32, alpha: u32, shift: u32) -> u32 {
@@ -24,7 +29,7 @@ pub(crate) const fn blend(from: u32, to: u32, alpha: u8) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{FADE_MS, blend, opacity};
+    use super::{FADE_MS, blend, opacity, opacity_out};
 
     #[test]
     fn a_fade_starts_clear_eases_out_and_ends_opaque() {
@@ -33,6 +38,9 @@ mod tests {
         assert!(opacity(FADE_MS / 4) < opacity(FADE_MS / 2));
         assert_eq!(opacity(FADE_MS), 255);
         assert_eq!(opacity(FADE_MS * 10), 255);
+        assert_eq!(opacity_out(0), 255);
+        assert_eq!(opacity_out(FADE_MS), 0);
+        assert_eq!(opacity_out(FADE_MS * 10), 0);
     }
 
     #[test]

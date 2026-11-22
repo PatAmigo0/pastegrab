@@ -10,6 +10,7 @@ mod rows;
 mod shell;
 mod taskbar;
 mod tray;
+mod tutorial;
 mod window;
 
 pub use bridge::WinView;
