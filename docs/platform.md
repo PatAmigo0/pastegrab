@@ -57,6 +57,12 @@ The killed job left its `.pastegrab-1` folder in the destination. 8.0 hasn't run
 
 **Defender on 8.1 still gets current definitions, and 8.0's never moves past its install media.** On 2026-11-22 the 8.1 VM updated through Windows Update to engine 1.1.26100.4 and definitions 1.463.414.0. The 8.0 VM stayed at engine 1.1.8502.0 and definitions 1.129.21.0 and reported that no updates were needed. Neither flagged `pgcli.exe`, `qjs.exe` or the packed Python.
 
+## Setup
+
+**`pastegrab-setup.exe` installed everything on the 8.1 VM in about two seconds, and the installed tools downloaded a video.** The build carried 57 MB that unpack to 251 MB in 503 files: the standalone Python package, QuickJS, gyan's ffmpeg and ffprobe, and `pgcli.exe` standing in for the window. The task dialog asked «Установить pastegrab?» with the size and folder, showed the progress bar, and ended on «pastegrab установлен». The installed `pgcli.exe` then fetched `jNQXAC9IVRw` with the installed tools only.
+
+A copy carrying the browser's internet mark, opened from Explorer, raised «Открыть файл - предупреждение системы безопасности» with «Неизвестный издатель» and «Запустить». Windows shows that dialog when SmartScreen is off, and the lab VMs have SmartScreen unset because the unattended install skipped the first-run screen that turns it on.
+
 ## YouTube's JS check
 
 **QuickJS 2026-06-04 solves YouTube's challenge in about 4.3 s on these VMs, QuickJS-NG in about 5.2 s.** The 8.0 runs shared the host with the 8.1 VM and took up to 5.7 and 7.8 s. yt-dlp kept nothing between runs, and a second probe of the same video paid the full time again. pastegrab ships Bellard's QuickJS and keeps the probe's info JSON for the fetch, which solves the challenge once per video.

@@ -15,7 +15,7 @@
 | YouTube's JavaScript challenge | Bellard's QuickJS 2026-06-04, built with mingw-w64 | Since 2025.11.12 yt-dlp needs a JS runtime for YouTube. Deno and Node embed V8, and current Node refuses to start below Windows 10. In the lab QuickJS solved the challenge in 4.3 s, QuickJS-NG in 5.2 s. |
 | UI | Native Win32 through the `windows` crate | No GPU or WebView dependency, native look and screen reader support, a few MB of memory. WebView2 stopped at version 109 on 8.1, which rules out Tauri. |
 | UI language | Russian only, every string in one table per language | A language added later is one new file, and the compiler rejects it while a string is missing. |
-| Installation | `pastegrab-setup.exe`, a 32-bit Rust bootstrapper | It runs on any Windows 8.x, measures the machine nobody can ask about, installs the 64-bit build, tunes settings to the hardware and handles prerequisites. |
+| Installation | `pastegrab-setup.exe`, one 32-bit Rust file that carries the program and every tool | He downloads one file, and nothing downloads during the install. It runs on any Windows 8.x, measures the machine nobody can ask about, installs the 64-bit build, tunes settings to the hardware and handles prerequisites. |
 | Concurrency | `std::thread` and channels, no async runtime | A handful of child processes and sockets at most. Blocking reads on pipes fit that directly. |
 | Toolchain | Pinned nightly, Tier 3 `x86_64-win7-windows-gnu`, `-Zbuild-std`, mingw-w64 in podman | Tier 1 Windows targets need Windows 10 since Rust 1.78. The win7 targets keep std's fallbacks for 7, 8 and 8.1. The GNU target links the `msvcrt.dll` every Windows 8 has and needs no Microsoft SDK. |
 | Windows 8 guarantee | CI checks every PE import against the exports both lab VMs share | A Windows 10 import becomes a failed build instead of a crash on the person's PC. 8.0 is the floor, so a function only 8.1 has fails the build too. |
@@ -487,16 +487,18 @@ Everything is per-user, and nothing needs admin rights. A `portable.txt` beside 
 
 ### Installer
 
-**`pastegrab-setup.exe` learns the machine nobody can ask about and fits pastegrab to it. CI builds the binaries, and nothing compiles on his PC.** It targets `i686-win7-windows-gnu`, so it starts on any Windows 7, 8 or 8.1, 32- or 64-bit.
+**`pastegrab-setup.exe` learns the machine nobody can ask about and fits pastegrab to it. CI builds the binaries, and nothing compiles on his PC.** It targets `i686-win7-windows-gnu`, so it starts on any Windows 7, 8 or 8.1, 32- or 64-bit. It carries the install folder as one tar compressed with zstd at level 19 and a 128 MiB window, which lets `ffmpeg.exe` and `ffprobe.exe` share their common code: 57 MB that unpack to 251 MB.
 
 1. It reads the machine: the Windows version and build through `RtlGetVersion`, the native architecture through `GetNativeSystemInfo`, the CPU name and features, RAM, free space, whether the system disk has a seek penalty, the screen size, and whether `ucrtbase.dll` exists.
 2. It checks the floor, 64-bit Windows 8.0 or newer. A 32-bit PC gets a plain Russian explanation instead of Windows' cryptic error about an invalid Win32 application. The release manifest has room for an x86 variant, which his PC doesn't need. Then it tunes defaults: parallel downloads from RAM, the x264 preset from the core count, the height cap from the screen.
-3. It downloads that variant and its tools from our release over rustls and checks every SHA-256 against a manifest signed with minisign, whose private key never leaves your password manager. It installs per-user, with no admin rights and no UAC prompt.
+3. It unpacks its payload next to the install folder and swaps it in, which leaves an old install whole when anything fails. Nothing downloads, and a setup that fetches executables looks like a dropper to antivirus heuristics. It installs per-user, with no admin rights and no UAC prompt.
 4. If `ucrtbase.dll` is missing, setup runs Microsoft's VC++ redistributable behind a UAC prompt, because the Python under yt-dlp needs the UCRT. It installs the UCRT system-wide down to Windows 8.0; the lab's 8.0 VM got its UCRT that way. His PC already has it, by the ProSportsAnalyzer evidence.
 5. It writes `deploy.json` with the machine profile and the path and version of every tool. The app reads that file at startup instead of probing hardware on every launch.
 6. It creates the Start menu shortcut and an uninstall entry under `HKCU` that runs `pastegrab.exe --uninstall`. From M4 it also registers the `pastegrab:` protocol.
 7. It runs a self-test: each tool's `--version`, a one-second ffmpeg encode of a test pattern, a QuickJS one-liner. The results and the machine profile go into a Russian report on the last screen.
 8. Nothing leaves his PC on its own. The report screen, and every failure in the app, has «Отправить разработчику», which shows the exact text first. Section 9 describes the transport under Reports.
+
+The first setup asks with a Windows task dialog, unpacks with a progress bar and reports where the program went, as `docs/platform.md` shows. The machine profile, the UCRT step, `deploy.json`, the shortcut, the uninstall entry, the self-test and the report come with the app's window.
 
 Steps 1 to 5 live in the `deploy` crate, and the app's yt-dlp updater calls the same code. Installs and updates share one tested path, and running setup again repairs or updates an install.
 
