@@ -62,10 +62,10 @@ fn write_whole(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let temp = path.with_extension("tmp");
     let mut file = File::create(&temp)?;
     file.write_all(bytes)?;
-    // The rename's write-through covers the rename alone, not the data.
+    // Flushed before the rename, so a crash leaves the old file or the whole new one.
     file.sync_all()?;
     drop(file);
-    pastegrab_os::replace_file(&temp, path)
+    fs::rename(&temp, path)
 }
 
 const NAMES: [(ProfileKind, &str); 6] = [

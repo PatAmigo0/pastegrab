@@ -589,7 +589,6 @@ version = "0.1.0"
 dependencies = [
  "pastegrab-app",
  "pastegrab-domain",
- "pastegrab-os",
  "pastegrab-testkit",
  "serde",
  "serde_json",

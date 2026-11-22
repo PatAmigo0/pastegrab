@@ -10,7 +10,6 @@ publish.workspace = true
 [dependencies]
 pastegrab-app = { path = "../app" }
 pastegrab-domain = { path = "../domain" }
-pastegrab-os = { path = "../os" }
 serde.workspace = true
 serde_json.workspace = true
 
