@@ -53,6 +53,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
     MF_GRAYED, MF_SEPARATOR, MF_STRING, PostMessageW, TPM_RETURNCMD, TPM_RIGHTBUTTON,
     TrackPopupMenu, WA_INACTIVE, WM_ACTIVATE, WM_APP, WM_CONTEXTMENU, WM_COPYDATA, WM_KEYDOWN,
 };
+use windows::Win32::UI::WindowsAndMessaging::{
+    HICON, IMAGE_ICON, LR_DEFAULTCOLOR, LoadIconW, LoadImageW, SM_CXSMICON, SM_CYSMICON,
+};
 
 use super::bridge::{WM_CORE, WinView};
 use super::instance::FORWARD;
@@ -61,6 +64,8 @@ use super::taskbar::Taskbar;
 
 /// The window class, which a second start looks for.
 pub(super) const CLASS: PCWSTR = w!("pastegrab");
+/// The exe icon's resource id, which `winres` gives it.
+const ICON: PCWSTR = PCWSTR(std::ptr::without_provenance(1));
 /// Ctrl+V outside the link box: paste the clipboard as a new link.
 const WM_PASTE_ANYWHERE: u32 = WM_APP + 2;
 const MENU_OPEN: i32 = 1;
@@ -116,6 +121,9 @@ pub fn run(core: Handle, view: Arc<WinView>, startup: Startup) -> Result<(), Str
         hCursor: unsafe { LoadCursorW(None, IDC_ARROW) }.unwrap_or_default(),
         // SAFETY: as above.
         hbrBackground: unsafe { GetSysColorBrush(COLOR_BTNFACE) },
+        // SAFETY: icons from this exe's resources, which live as long as the process.
+        hIcon: unsafe { LoadIconW(Some(instance), ICON) }.unwrap_or_default(),
+        hIconSm: small_icon(instance),
         lpszClassName: class,
         ..Default::default()
     };
@@ -820,6 +828,22 @@ fn fonts(dpi: i32) -> Fonts {
             normal: CreateFontIndirectW(&raw const face),
             bold: CreateFontIndirectW(&raw const heavy),
         }
+    }
+}
+
+fn small_icon(instance: HINSTANCE) -> HICON {
+    // SAFETY: plain queries and an icon from this exe's resources, shared and never freed.
+    unsafe {
+        let (width, height) = (GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON));
+        LoadImageW(
+            Some(instance),
+            ICON,
+            IMAGE_ICON,
+            width,
+            height,
+            LR_DEFAULTCOLOR,
+        )
+        .map_or_default(|handle| HICON(handle.0))
     }
 }
 
