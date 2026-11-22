@@ -4,8 +4,6 @@
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
-#[cfg_attr(not(windows), allow(dead_code, reason = "the Windows dialog calls it"))]
-mod install;
 #[cfg(windows)]
 mod ui;
 

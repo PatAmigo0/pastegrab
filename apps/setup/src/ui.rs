@@ -29,8 +29,6 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::{BOOL, HRESULT, HSTRING, PCWSTR};
 
-use crate::install::install;
-
 const INSTALL: i32 = 100;
 const OPEN: i32 = 101;
 const STEPS: usize = 1000;
@@ -204,7 +202,7 @@ impl Dialog {
         let (payload, dest, shared) = (self.payload, self.dest.clone(), Arc::clone(&self.shared));
         let size_kib = u32::try_from(self.unpacked / 1024).unwrap_or(u32::MAX);
         thread::spawn(move || {
-            let result = install(payload, &dest, &shared.read)
+            let result = pastegrab_deploy::install(payload, &dest, &shared.read)
                 .and_then(|()| register(&dest, size_kib))
                 .map_err(|e| e.to_string());
             *shared

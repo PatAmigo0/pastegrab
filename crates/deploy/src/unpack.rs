@@ -1,4 +1,5 @@
-//! Unpacking the payload: a tar compressed with zstd, laid out the way the install folder is.
+//! Unpacking a tar compressed with zstd: setup's payload, laid out the way the install folder
+//! is, and the app updates that land in one version folder.
 
 use std::fs;
 use std::io::{self, Read};
@@ -17,7 +18,7 @@ pub fn install(payload: &[u8], dest: &Path, read: &AtomicU64) -> io::Result<()> 
     let fresh = sibling(dest, "new");
     let old = sibling(dest, "old");
     remove(&fresh)?;
-    unpack(payload, &fresh, read)?;
+    unpack_counted(payload, &fresh, read)?;
     remove(&old)?;
     if dest.exists() {
         fs::rename(dest, &old)?;
@@ -28,12 +29,23 @@ pub fn install(payload: &[u8], dest: &Path, read: &AtomicU64) -> io::Result<()> 
     Ok(())
 }
 
-fn unpack(payload: &[u8], dest: &Path, read: &AtomicU64) -> io::Result<()> {
-    let counted = Counted {
-        rest: payload,
-        read,
-    };
-    let decoder = StreamingDecoder::new(counted).map_err(io::Error::other)?;
+fn unpack_counted(payload: &[u8], dest: &Path, read: &AtomicU64) -> io::Result<()> {
+    unpack(
+        Counted {
+            rest: payload,
+            read,
+        },
+        dest,
+    )
+}
+
+/// Unpacks `archive` into `dest`, creating it. Entries that would land outside `dest` fail.
+///
+/// # Errors
+///
+/// A broken archive or a full disk.
+pub fn unpack(archive: impl Read, dest: &Path) -> io::Result<()> {
+    let decoder = StreamingDecoder::new(archive).map_err(io::Error::other)?;
     let mut archive = tar::Archive::new(decoder);
     archive.set_preserve_permissions(false);
     archive.set_preserve_mtime(false);
@@ -78,7 +90,7 @@ mod tests {
 
     use ruzstd::encoding::{CompressionLevel, compress_to_vec};
 
-    use super::install;
+    use super::{install, unpack};
 
     fn payload(files: &[(&str, &[u8])]) -> Vec<u8> {
         let mut builder = tar::Builder::new(Vec::new());
@@ -97,7 +109,7 @@ mod tests {
 
     fn temp(name: &str) -> std::path::PathBuf {
         let dir =
-            std::env::temp_dir().join(format!("pastegrab-setup-{name}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("pastegrab-unpack-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).expect("a temp folder");
         dir
@@ -140,6 +152,19 @@ mod tests {
         assert!(install(&broken, &dest, &AtomicU64::new(0)).is_err());
         assert_eq!(fs::read(dest.join("a.txt")).expect("a file"), b"kept");
         assert!(Path::new(&root.join("pastegrab")).exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn an_update_unpacks_into_a_new_version_folder() {
+        let root = temp("update");
+        let dest = root.join("app").join("0.2.0.part");
+        let archive = payload(&[("pastegrab-app.exe", b"new")]);
+        unpack(archive.as_slice(), &dest).expect("an unpack");
+        assert_eq!(
+            fs::read(dest.join("pastegrab-app.exe")).expect("a file"),
+            b"new"
+        );
         let _ = fs::remove_dir_all(&root);
     }
 }

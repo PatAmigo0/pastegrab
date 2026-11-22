@@ -3,9 +3,11 @@
 
 #[cfg(windows)]
 mod sys;
+mod unpack;
 
 #[cfg(windows)]
 pub use sys::{Entry, register, unregister};
+pub use unpack::{install, unpack};
 
 use std::env::{self, consts::EXE_SUFFIX};
 use std::ffi::OsString;

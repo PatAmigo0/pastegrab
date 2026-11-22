@@ -633,6 +633,8 @@ dependencies = [
 name = "pastegrab-deploy"
 version = "0.1.0"
 dependencies = [
+ "ruzstd",
+ "tar",
  "windows",
 ]
 
@@ -697,8 +699,6 @@ dependencies = [
  "pastegrab-deploy",
  "pastegrab-i18n",
  "pastegrab-winres",
- "ruzstd",
- "tar",
  "windows",
 ]
 
