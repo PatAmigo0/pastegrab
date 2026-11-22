@@ -58,14 +58,15 @@ use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, DestroyMenu, GetCursorPos, GetDlgCtrlID, HMENU as MENU, IDCANCEL,
     MF_GRAYED, MF_SEPARATOR, MF_STRING, PostMessageW, SWP_NOACTIVATE, SWP_NOZORDER, SetWindowPos,
     TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, WA_INACTIVE, WM_ACTIVATE, WM_APP,
-    WM_CONTEXTMENU, WM_COPYDATA, WM_DPICHANGED, WM_KEYDOWN, WM_TIMER,
+    WM_CONTEXTMENU, WM_COPYDATA, WM_DPICHANGED, WM_KEYDOWN, WM_SETTINGCHANGE, WM_SYSCOLORCHANGE,
+    WM_THEMECHANGED, WM_TIMER,
 };
 
 use super::bridge::{WM_CORE, WinView};
 use super::dpi;
 use super::fade::{self, Fade};
 use super::instance::FORWARD;
-use super::rows::{self, RowFades, RowHeight};
+use super::rows::{self, PaintContext, ProgressTheme, RowFades, RowHeight};
 use super::shell;
 use super::taskbar::Taskbar;
 use super::tray::{Tray, WM_TRAY};
@@ -366,6 +367,9 @@ struct Ui {
     row_fades: RowFades,
     button_widths: Cell<(i32, i32)>,
     row_height: RefCell<Option<RowHeight>>,
+    progress_theme: RefCell<Option<ProgressTheme>>,
+    high_contrast: Cell<bool>,
+    clear_enabled: Cell<bool>,
     guide: Guide,
 }
 
@@ -390,6 +394,9 @@ impl Ui {
             row_fades: RowFades::default(),
             button_widths: Cell::new((64, 48)),
             row_height: RefCell::new(None),
+            progress_theme: RefCell::new(None),
+            high_contrast: Cell::new(rows::high_contrast()),
+            clear_enabled: Cell::new(false),
             guide: Guide::new(startup.tutorial_seen),
         }
     }
@@ -418,7 +425,7 @@ impl Ui {
             WM_TRAY => self.tray.message(hwnd, lparam),
             WM_TIMER if wparam.0 == fade::TIMER => {
                 let ended = self.fade.tick(hwnd);
-                if ended.contains(&fade::TUTORIAL) && self.guide.finish_close() {
+                if ended & fade::TUTORIAL != 0 && self.guide.finish_close() {
                     self.layout(hwnd);
                 }
             }
@@ -426,6 +433,16 @@ impl Ui {
                 let board = self.board.borrow();
                 self.row_fades
                     .tick(hwnd, self.controls().list, board.rows());
+            }
+            WM_THEMECHANGED => {
+                let list = self.controls().list;
+                let _ = self.progress_theme.replace(ProgressTheme::open(list));
+                self.high_contrast.set(rows::high_contrast());
+                return None;
+            }
+            WM_SYSCOLORCHANGE | WM_SETTINGCHANGE => {
+                self.high_contrast.set(rows::high_contrast());
+                return None;
             }
             WM_ACTIVATE => {
                 if u32::try_from(low(wparam.0)).unwrap_or(0) != WA_INACTIVE {
@@ -492,6 +509,9 @@ impl Ui {
         let _ = self
             .row_height
             .replace(RowHeight::apply(controls.list, dpi));
+        let _ = self
+            .progress_theme
+            .replace(ProgressTheme::open(controls.list));
         enable(controls.clear, false);
         cue_banner(controls.link, RU.paste_hint);
         set_list_style(controls.list, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
@@ -740,14 +760,16 @@ impl Ui {
                 // SAFETY: a report list view's NM_CUSTOMDRAW comes with an NMLVCUSTOMDRAW.
                 let draw = unsafe { &mut *(lparam.0 as *mut NMLVCUSTOMDRAW) };
                 let board = self.board.borrow();
-                return Some(rows::paint(
-                    header.hwndFrom,
-                    draw,
-                    board.rows(),
-                    &self.row_fades,
-                    self.dpi.get(),
-                    self.button_widths.get(),
-                ));
+                let theme = self.progress_theme.borrow();
+                let ctx = PaintContext {
+                    rows: board.rows(),
+                    fades: &self.row_fades,
+                    theme: theme.as_ref(),
+                    high_contrast: self.high_contrast.get(),
+                    dpi: self.dpi.get(),
+                    button_widths: self.button_widths.get(),
+                };
+                return Some(rows::paint(header.hwndFrom, draw, &ctx));
             }
             NM_CLICK => {
                 // SAFETY: NM_CLICK on a list view comes with an NMITEMACTIVATE.
@@ -869,7 +891,7 @@ impl Ui {
         let mut card = false;
         let mut rows = Vec::new();
         let mut ended = None;
-        let (count, notice) = {
+        let (count, notice, activity, has_ended) = {
             let mut board = self.board.borrow_mut();
             for update in updates {
                 let added_id = match update {
@@ -914,7 +936,12 @@ impl Ui {
             let notice = ended
                 .and_then(|index| board.rows().get(index))
                 .and_then(|row| text::notice(row, &RU));
-            (board.rows().len(), notice)
+            (
+                board.rows().len(),
+                notice,
+                board.activity(),
+                board.has_ended(),
+            )
         };
         for id in added_ids {
             self.row_fades.add(hwnd, id);
@@ -930,8 +957,10 @@ impl Ui {
             set_item_count(list, count);
             ensure_visible(list, count.saturating_sub(1));
         }
-        rows.sort_unstable();
-        rows.dedup();
+        if rows.len() > 1 {
+            rows.sort_unstable();
+            rows.dedup();
+        }
         for index in rows {
             redraw_item(list, index);
         }
@@ -939,12 +968,10 @@ impl Ui {
             self.refresh_card(hwnd);
             self.layout(hwnd);
         }
-        let (activity, ended) = {
-            let board = self.board.borrow();
-            (board.activity(), board.has_ended())
-        };
         self.taskbar.show(hwnd, activity);
-        enable(self.controls().clear, ended);
+        if self.clear_enabled.replace(has_ended) != has_ended {
+            enable(self.controls().clear, has_ended);
+        }
     }
 
     /// Drops the rows that ended; rows that run or wait stay.
@@ -957,6 +984,7 @@ impl Ui {
         };
         deselect_all(c.list);
         set_item_count(c.list, count);
+        self.clear_enabled.set(false);
         enable(c.clear, false);
     }
 

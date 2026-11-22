@@ -1,7 +1,7 @@
 //! The job list's custom painting, inline actions and row fades. The list still hands Narrator
 //! the plain text.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use pastegrab_app::board::Row;
 use pastegrab_domain::job::{JobId, JobState};
@@ -9,20 +9,20 @@ use pastegrab_i18n::RU;
 use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
     COLOR_BTNFACE, COLOR_BTNSHADOW, COLOR_BTNTEXT, COLOR_GRAYTEXT, COLOR_HIGHLIGHT,
-    COLOR_HIGHLIGHTTEXT, COLOR_WINDOW, COLOR_WINDOWTEXT, CreateSolidBrush, DT_CALCRECT, DT_CENTER,
-    DT_END_ELLIPSIS, DT_NOPREFIX, DT_SINGLELINE, DT_VCENTER, DeleteObject, DrawTextW, FillRect,
-    FrameRect, GetDC, GetSysColor, GetSysColorBrush, HDC, HFONT, ReleaseDC, SYS_COLOR_INDEX,
-    SelectObject, SetBkMode, SetTextColor, TRANSPARENT,
+    COLOR_HIGHLIGHTTEXT, COLOR_WINDOW, COLOR_WINDOWTEXT, CreateSolidBrush, DRAW_TEXT_FORMAT,
+    DT_CALCRECT, DT_CENTER, DT_END_ELLIPSIS, DT_NOPREFIX, DT_SINGLELINE, DT_VCENTER, DeleteObject,
+    DrawTextW, FillRect, FrameRect, GetDC, GetSysColor, GetSysColorBrush, HDC, HFONT, ReleaseDC,
+    SYS_COLOR_INDEX, SelectObject, SetBkMode, SetTextColor, TRANSPARENT,
 };
 use windows::Win32::System::SystemInformation::GetTickCount64;
 use windows::Win32::UI::Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW};
 use windows::Win32::UI::Controls::{
     CDDS_ITEMPREPAINT, CDDS_PREPAINT, CDDS_SUBITEM, CDRF_DODEFAULT, CDRF_NEWFONT,
     CDRF_NOTIFYITEMDRAW, CDRF_NOTIFYSUBITEMDRAW, CDRF_SKIPDEFAULT, CloseThemeData,
-    DrawThemeBackground, GetThemeBackgroundContentRect, HIMAGELIST, ILC_COLOR32, ImageList_Create,
-    ImageList_Destroy, LVIR_BOUNDS, LVIS_SELECTED, LVM_GETITEMSTATE, LVM_GETSUBITEMRECT,
-    LVM_REDRAWITEMS, LVM_SETIMAGELIST, LVSIL_SMALL, NMLVCUSTOMDRAW, OpenThemeData, PBFS_NORMAL,
-    PP_BAR, PP_FILL,
+    DrawThemeBackground, GetThemeBackgroundContentRect, HIMAGELIST, HTHEME, ILC_COLOR32,
+    ImageList_Create, ImageList_Destroy, LVIR_BOUNDS, LVIS_SELECTED, LVM_GETITEMSTATE,
+    LVM_GETSUBITEMRECT, LVM_REDRAWITEMS, LVM_SETIMAGELIST, LVSIL_SMALL, NMLVCUSTOMDRAW,
+    OpenThemeData, PBFS_NORMAL, PP_BAR, PP_FILL,
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::GetFocus;
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -41,7 +41,7 @@ const FAILURE_RED: COLORREF = COLORREF(0x0028_28A0);
 /// The row-fade timer on the owner window.
 pub(super) const TIMER: usize = 2;
 const STEP_MS: u32 = 15;
-const CANCEL_GLYPH: &str = "×";
+const CANCEL_UNIT: u16 = '×' as u16;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FadeKind {
@@ -59,7 +59,9 @@ struct RowFade {
 /// Active fades for newly added rows and newly revealed finished-job buttons.
 #[derive(Default)]
 pub(super) struct RowFades {
+    active: Cell<bool>,
     entries: RefCell<Vec<RowFade>>,
+    scratch: RefCell<Vec<usize>>,
 }
 
 impl RowFades {
@@ -84,12 +86,18 @@ impl RowFades {
             kind,
             started: now,
         });
+        self.active.set(true);
         drop(entries);
         // SAFETY: the timer belongs to `owner`, a window of this thread.
         unsafe { SetTimer(Some(owner), TIMER, STEP_MS, None) };
     }
 
-    pub(super) fn alphas(&self, id: JobId, now: u64) -> (u8, u8) {
+    fn alphas(&self, id: JobId) -> (u8, u8) {
+        if !self.active.get() {
+            return (u8::MAX, u8::MAX);
+        }
+        // SAFETY: a plain query.
+        let now = unsafe { GetTickCount64() };
         let entries = self.entries.borrow();
         let mut row = u8::MAX;
         let mut buttons = u8::MAX;
@@ -106,27 +114,57 @@ impl RowFades {
     pub(super) fn tick(&self, owner: HWND, list: HWND, rows: &[Row]) {
         // SAFETY: a plain query.
         let now = unsafe { GetTickCount64() };
-        let (indices, empty) = {
+        let mut scratch = self.scratch.borrow_mut();
+        scratch.clear();
+        let empty = {
             let mut entries = self.entries.borrow_mut();
-            let mut indices: Vec<usize> = entries
-                .iter()
-                .filter_map(|entry| rows.iter().position(|row| row.id == entry.id))
-                .collect();
-            indices.sort_unstable();
-            indices.dedup();
+            for entry in entries.iter() {
+                if let Some(index) = rows.iter().position(|row| row.id == entry.id) {
+                    scratch.push(index);
+                }
+            }
+            scratch.sort_unstable();
+            scratch.dedup();
             entries.retain(|entry| {
                 now.saturating_sub(entry.started) < motion::FADE_MS
                     && rows.iter().any(|row| row.id == entry.id)
             });
-            (indices, entries.is_empty())
+            entries.is_empty()
         };
         if empty {
+            self.active.set(false);
             // SAFETY: the timer belongs to `owner`, a window of this thread.
             let _ = unsafe { KillTimer(Some(owner), TIMER) };
         }
-        for index in indices {
+        // Move the indices out so no RefCell stays borrowed across SendMessageW.
+        let indices = std::mem::take(&mut *scratch);
+        drop(scratch);
+        for &index in &indices {
             redraw_item(list, index);
         }
+        *self.scratch.borrow_mut() = indices;
+    }
+}
+
+/// Cached theme handle for the list view's progress bars.
+pub(super) struct ProgressTheme(HTHEME);
+
+impl ProgressTheme {
+    pub(super) fn open(list: HWND) -> Option<Self> {
+        // SAFETY: `list` belongs to this thread; `Drop` closes the handle once.
+        let theme = unsafe { OpenThemeData(Some(list), w!("PROGRESS")) };
+        (!theme.is_invalid()).then_some(Self(theme))
+    }
+
+    const fn handle(&self) -> HTHEME {
+        self.0
+    }
+}
+
+impl Drop for ProgressTheme {
+    fn drop(&mut self) {
+        // SAFETY: this wrapper is the sole owner of the theme handle.
+        let _ = unsafe { CloseThemeData(self.0) };
     }
 }
 
@@ -181,16 +219,12 @@ pub(super) fn measure_buttons(list: HWND, font: HFONT) -> (i32, i32) {
 
 fn text_width(dc: HDC, text: &str) -> i32 {
     let mut rect = RECT::default();
-    let mut units: Vec<u16> = text.encode_utf16().collect();
-    // SAFETY: `dc` is valid and `units` and `rect` outlive the call.
-    unsafe {
-        DrawTextW(
-            dc,
-            &mut units,
-            &raw mut rect,
-            DT_CALCRECT | DT_SINGLELINE | DT_NOPREFIX,
-        );
-    }
+    draw_text(
+        dc,
+        text,
+        &mut rect,
+        DT_CALCRECT | DT_SINGLELINE | DT_NOPREFIX,
+    );
     rect.right - rect.left
 }
 
@@ -215,43 +249,37 @@ pub(super) fn hit(
     )
 }
 
+/// Cached visual state passed into every row repaint.
+pub(super) struct PaintContext<'a> {
+    pub(super) rows: &'a [Row],
+    pub(super) fades: &'a RowFades,
+    pub(super) theme: Option<&'a ProgressTheme>,
+    pub(super) high_contrast: bool,
+    pub(super) dpi: i32,
+    pub(super) button_widths: (i32, i32),
+}
+
 /// Answers the list's custom draw notification.
-pub(super) fn paint(
-    list: HWND,
-    draw: &mut NMLVCUSTOMDRAW,
-    rows: &[Row],
-    fades: &RowFades,
-    dpi: i32,
-    button_widths: (i32, i32),
-) -> LRESULT {
+pub(super) fn paint(list: HWND, draw: &mut NMLVCUSTOMDRAW, ctx: &PaintContext<'_>) -> LRESULT {
     let stage = draw.nmcd.dwDrawStage;
     let answer = if stage == CDDS_PREPAINT {
         CDRF_NOTIFYITEMDRAW
     } else if stage == CDDS_ITEMPREPAINT {
         CDRF_NOTIFYSUBITEMDRAW
     } else if stage.0 == CDDS_ITEMPREPAINT.0 | CDDS_SUBITEM.0 {
-        subitem(list, draw, rows, fades, dpi, button_widths)
+        subitem(list, draw, ctx)
     } else {
         CDRF_DODEFAULT
     };
     LRESULT(isize::try_from(answer).unwrap_or(0))
 }
 
-fn subitem(
-    list: HWND,
-    draw: &mut NMLVCUSTOMDRAW,
-    rows: &[Row],
-    fades: &RowFades,
-    dpi: i32,
-    button_widths: (i32, i32),
-) -> u32 {
+fn subitem(list: HWND, draw: &mut NMLVCUSTOMDRAW, ctx: &PaintContext<'_>) -> u32 {
     let index = draw.nmcd.dwItemSpec;
-    let Some(row) = rows.get(index) else {
+    let Some(row) = ctx.rows.get(index) else {
         return CDRF_DODEFAULT;
     };
-    // SAFETY: a plain query.
-    let now = unsafe { GetTickCount64() };
-    let (row_alpha, buttons_alpha) = fades.alphas(row.id, now);
+    let (row_alpha, buttons_alpha) = ctx.fades.alphas(row.id);
     let selected = is_selected(list, index);
     let (back, fore) = colors(list, selected);
     if draw.iSubItem == 0 {
@@ -270,7 +298,9 @@ fn subitem(
     let canvas = Canvas {
         hdc: draw.nmcd.hdc,
         cell: rect,
-        dpi,
+        theme: ctx.theme.map(ProgressTheme::handle),
+        high_contrast: ctx.high_contrast,
+        dpi: ctx.dpi,
     };
     if !row.state.is_over() {
         canvas.cancellable(
@@ -289,12 +319,12 @@ fn subitem(
             selected,
             row_alpha,
             buttons_alpha.min(row_alpha),
-            button_widths,
+            ctx.button_widths,
         );
         return CDRF_SKIPDEFAULT;
     }
     if matches!(row.state, JobState::Failed(_)) {
-        let target = if !selected && !high_contrast() {
+        let target = if !selected && !ctx.high_contrast {
             FAILURE_RED.0
         } else {
             sys_color(fore)
@@ -318,6 +348,8 @@ fn subitem(
 struct Canvas {
     hdc: HDC,
     cell: RECT,
+    theme: Option<HTHEME>,
+    high_contrast: bool,
     dpi: i32,
 }
 
@@ -328,9 +360,8 @@ impl Canvas {
         let layout = cell::cancel_layout(from_win(self.cell), self.dpi, share.is_some());
         let mut label = to_win(layout.label);
         let mut cancel = to_win(layout.cancel);
-        let mut units: Vec<u16> = state.encode_utf16().collect();
-        let mut cross: Vec<u16> = CANCEL_GLYPH.encode_utf16().collect();
-        let cross_target = if selected || high_contrast() {
+        let mut cross = [CANCEL_UNIT];
+        let cross_target = if selected || self.high_contrast {
             fg
         } else {
             sys_color(COLOR_GRAYTEXT)
@@ -340,12 +371,16 @@ impl Canvas {
         unsafe {
             FillRect(self.hdc, &raw const self.cell, GetSysColorBrush(back));
             if let (Some(bar), Some(share)) = (layout.bar, share) {
-                self.bar(list, to_win(bar), share);
+                self.bar(to_win(bar), share);
             }
             SetBkMode(self.hdc, TRANSPARENT);
             SetTextColor(self.hdc, COLORREF(motion::blend(bg, fg, alpha)));
-            let flags = DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX;
-            DrawTextW(self.hdc, &mut units, &raw mut label, flags);
+            draw_text(
+                self.hdc,
+                state,
+                &mut label,
+                DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX,
+            );
             SetTextColor(self.hdc, COLORREF(motion::blend(bg, cross_target, alpha)));
             DrawTextW(
                 self.hdc,
@@ -374,15 +409,18 @@ impl Canvas {
             button_widths.1,
         );
         let mut label = to_win(layout.label);
-        let mut units: Vec<u16> = state.encode_utf16().collect();
-        // SAFETY: the list's device context is valid for this notification; the rectangles and
-        // the text outlive the calls.
+        // SAFETY: the list's device context is valid for this notification; the rectangles outlive
+        // the calls.
         unsafe {
             FillRect(self.hdc, &raw const self.cell, GetSysColorBrush(back));
             SetBkMode(self.hdc, TRANSPARENT);
             SetTextColor(self.hdc, COLORREF(motion::blend(bg, fg, row_alpha)));
-            let flags = DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX;
-            DrawTextW(self.hdc, &mut units, &raw mut label, flags);
+            draw_text(
+                self.hdc,
+                state,
+                &mut label,
+                DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX,
+            );
         }
         if let Some((open, folder)) = layout.buttons {
             self.button(to_win(open), RU.row_actions.open, bg, buttons_alpha, true);
@@ -400,45 +438,47 @@ impl Canvas {
         if alpha == 0 {
             return;
         }
-        let fill_color = COLORREF(motion::blend(bg, sys_color(COLOR_BTNFACE), alpha));
-        let border_target = if primary && !high_contrast() {
-            sys_color(COLOR_HIGHLIGHT)
+        let border_index = if primary && !self.high_contrast {
+            COLOR_HIGHLIGHT
         } else {
-            sys_color(COLOR_BTNSHADOW)
+            COLOR_BTNSHADOW
         };
-        let border_color = COLORREF(motion::blend(bg, border_target, alpha));
         let text_color = COLORREF(motion::blend(bg, sys_color(COLOR_BTNTEXT), alpha));
-        let mut units: Vec<u16> = label.encode_utf16().collect();
-        // SAFETY: both GDI brushes are deleted before returning, and `rect` and `units` outlive
-        // the calls.
+        // SAFETY: system brushes need no release; blended brushes are deleted before returning.
         unsafe {
-            let fill = CreateSolidBrush(fill_color);
-            FillRect(self.hdc, &raw const rect, fill);
-            let _ = DeleteObject(fill.into());
-            let border = CreateSolidBrush(border_color);
-            FrameRect(self.hdc, &raw const rect, border);
-            let _ = DeleteObject(border.into());
+            if alpha == u8::MAX {
+                FillRect(self.hdc, &raw const rect, GetSysColorBrush(COLOR_BTNFACE));
+                FrameRect(self.hdc, &raw const rect, GetSysColorBrush(border_index));
+            } else {
+                let fill =
+                    CreateSolidBrush(COLORREF(motion::blend(bg, sys_color(COLOR_BTNFACE), alpha)));
+                FillRect(self.hdc, &raw const rect, fill);
+                let _ = DeleteObject(fill.into());
+                let border =
+                    CreateSolidBrush(COLORREF(motion::blend(bg, sys_color(border_index), alpha)));
+                FrameRect(self.hdc, &raw const rect, border);
+                let _ = DeleteObject(border.into());
+            }
             SetBkMode(self.hdc, TRANSPARENT);
             SetTextColor(self.hdc, text_color);
-            DrawTextW(
+            draw_text(
                 self.hdc,
-                &mut units,
-                &raw mut rect,
+                label,
+                &mut rect,
                 DT_SINGLELINE | DT_VCENTER | DT_CENTER | DT_NOPREFIX,
             );
         }
     }
 
     /// The visual style's progress bar, or a framed fill in system colors without one.
-    fn bar(&self, list: HWND, bar: RECT, share: u16) {
+    fn bar(&self, bar: RECT, share: u16) {
         let filled = |inner: RECT| RECT {
             right: inner.left + (inner.right - inner.left) * i32::from(share) / 1000,
             ..inner
         };
-        // SAFETY: as in `cancellable`; the theme handle is closed before returning.
+        // SAFETY: `self.hdc` and any cached `HTHEME` outlive this notification.
         unsafe {
-            let theme = OpenThemeData(Some(list), w!("PROGRESS"));
-            if theme.is_invalid() {
+            let Some(theme) = self.theme else {
                 FrameRect(self.hdc, &raw const bar, GetSysColorBrush(COLOR_BTNSHADOW));
                 let inner = RECT {
                     left: bar.left + 1,
@@ -449,7 +489,7 @@ impl Canvas {
                 let part = filled(inner);
                 FillRect(self.hdc, &raw const part, GetSysColorBrush(COLOR_HIGHLIGHT));
                 return;
-            }
+            };
             let _ = DrawThemeBackground(theme, self.hdc, PP_BAR.0, 0, &raw const bar, None);
             let inner =
                 GetThemeBackgroundContentRect(theme, Some(self.hdc), PP_BAR.0, 0, &raw const bar)
@@ -463,9 +503,26 @@ impl Canvas {
                 &raw const part,
                 None,
             );
-            let _ = CloseThemeData(theme);
         }
     }
+}
+
+/// Encodes `text` onto the stack for short labels so painting allocates nothing on the common path.
+fn draw_text(hdc: HDC, text: &str, rect: &mut RECT, flags: DRAW_TEXT_FORMAT) {
+    let mut stack = [0_u16; 128];
+    let mut len = 0;
+    for unit in text.encode_utf16() {
+        if len == stack.len() {
+            let mut heap: Vec<u16> = text.encode_utf16().collect();
+            // SAFETY: `hdc` is valid and `heap` and `rect` outlive the call.
+            unsafe { DrawTextW(hdc, &mut heap, rect, flags) };
+            return;
+        }
+        stack[len] = unit;
+        len += 1;
+    }
+    // SAFETY: `hdc` is valid and `stack[..len]` and `rect` outlive the call.
+    unsafe { DrawTextW(hdc, &mut stack[..len], rect, flags) };
 }
 
 fn sys_color(index: SYS_COLOR_INDEX) -> u32 {
@@ -506,12 +563,14 @@ fn redraw_item(list: HWND, index: usize) {
 
 /// The selection's colors as the list paints them: strong with focus, faint without.
 fn colors(list: HWND, selected: bool) -> (SYS_COLOR_INDEX, SYS_COLOR_INDEX) {
+    if !selected {
+        return (COLOR_WINDOW, COLOR_WINDOWTEXT);
+    }
     // SAFETY: a plain query.
-    let focused = unsafe { GetFocus() } == list;
-    match (selected, focused) {
-        (true, true) => (COLOR_HIGHLIGHT, COLOR_HIGHLIGHTTEXT),
-        (true, false) => (COLOR_BTNFACE, COLOR_WINDOWTEXT),
-        (false, _) => (COLOR_WINDOW, COLOR_WINDOWTEXT),
+    if unsafe { GetFocus() } == list {
+        (COLOR_HIGHLIGHT, COLOR_HIGHLIGHTTEXT)
+    } else {
+        (COLOR_BTNFACE, COLOR_WINDOWTEXT)
     }
 }
 
@@ -547,7 +606,8 @@ fn is_selected(list: HWND, index: usize) -> bool {
     state.0.cast_unsigned() & mask != 0
 }
 
-fn high_contrast() -> bool {
+/// Whether Windows High Contrast mode is on.
+pub(super) fn high_contrast() -> bool {
     let mut contrast = HIGHCONTRASTW {
         cbSize: u32::try_from(size_of::<HIGHCONTRASTW>()).unwrap_or(0),
         ..Default::default()

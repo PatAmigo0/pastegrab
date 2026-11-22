@@ -1,5 +1,5 @@
 //! Per-monitor DPI on Windows 8.1 through `shcore.dll` loaded at runtime, and system DPI on
-//! Windows 8.0 where that DLL does not exist.
+//! Windows 8.0 where `SetProcessDpiAwareness` is absent.
 
 use std::sync::OnceLock;
 
@@ -60,7 +60,7 @@ pub fn enable() {
             return;
         }
     }
-    // SAFETY: plain call; falls back to system DPI when `shcore.dll` is absent.
+    // SAFETY: plain call; falls back to system DPI when `SetProcessDpiAwareness` is absent.
     let _ = unsafe { SetProcessDPIAware() };
 }
 

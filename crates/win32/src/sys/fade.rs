@@ -17,10 +17,10 @@ use crate::motion;
 
 /// The fade's timer on the owner window.
 pub(super) const TIMER: usize = 1;
-/// Tag for the preview card's fade.
-pub(super) const CARD: u8 = 1;
-/// Tag for the tutorial panel's fade.
-pub(super) const TUTORIAL: u8 = 2;
+/// Tag bit for the preview card's fade.
+pub(super) const CARD: u8 = 1 << 0;
+/// Tag bit for the tutorial panel's fade.
+pub(super) const TUTORIAL: u8 = 1 << 1;
 const STEP_MS: u32 = 15;
 
 struct Track {
@@ -109,12 +109,12 @@ impl Fade {
         }
     }
 
-    /// One step on the timer. Returns tags whose fade-out just reached clear.
-    pub(super) fn tick(&self, owner: HWND) -> Vec<u8> {
+    /// One step on the timer. Returns a bitmask of tags whose fade-out just reached clear.
+    pub(super) fn tick(&self, owner: HWND) -> u8 {
         // SAFETY: a plain query.
         let now = unsafe { GetTickCount64() };
         let mut unlayer = Vec::new();
-        let mut hidden = Vec::new();
+        let mut hidden = 0_u8;
         let empty = {
             let mut tracks = self.tracks.borrow_mut();
             let mut i = 0;
@@ -138,7 +138,7 @@ impl Fade {
                         for &window in &track.windows {
                             set_alpha(window, 0);
                         }
-                        hidden.push(track.tag);
+                        hidden |= track.tag;
                     }
                 } else {
                     for &window in &tracks[i].windows {
