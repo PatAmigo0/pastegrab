@@ -1,0 +1,19 @@
+[package]
+name = "pastegrab-update"
+version = "0.1.0"
+description = "Which signed release to install, and which version the launcher starts"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+minisign-verify = "0.3.0"
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+minisign = "0.10.0"
+
+[lints]
+workspace = true
