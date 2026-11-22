@@ -58,12 +58,14 @@ pub fn settings(store: &dyn SettingsStore) {
     let first = Choices {
         dest: Some(PathBuf::from("D:\\Видео\\Забеги")),
         profile: Some(ProfileKind::Analysis),
+        tutorial: Some(1),
     };
     store.save(&first).expect("a save");
     assert_eq!(store.load(), Some(first));
     let second = Choices {
         dest: None,
         profile: Some(ProfileKind::Audio),
+        tutorial: None,
     };
     store.save(&second).expect("a second save");
     assert_eq!(store.load(), Some(second));

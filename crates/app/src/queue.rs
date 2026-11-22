@@ -29,6 +29,8 @@ pub struct Settings {
     pub data: PathBuf,
     /// Steps at once.
     pub permits: Permits,
+    /// The highest tutorial version already seen.
+    pub tutorial: u32,
 }
 
 /// A paste and the choices made with it.
@@ -65,6 +67,8 @@ pub enum Input {
     Dest(PathBuf),
     /// The profile later video links start with.
     DefaultProfile(ProfileKind),
+    /// The person finished or skipped this tutorial version.
+    TutorialSeen(u32),
     /// A worker finished a step.
     Done(JobId, Outcome),
 }
@@ -246,7 +250,11 @@ impl Queue {
                 self.settings.profile = profile;
                 fx.push(self.choices());
             }
-            Input::Dest(_) | Input::DefaultProfile(_) => {}
+            Input::TutorialSeen(version) if version > self.settings.tutorial => {
+                self.settings.tutorial = version;
+                fx.push(self.choices());
+            }
+            Input::Dest(_) | Input::DefaultProfile(_) | Input::TutorialSeen(_) => {}
             Input::Done(id, outcome) => self.done(id, outcome, &mut fx),
         }
         self.start_steps(&mut fx);
@@ -421,6 +429,7 @@ impl Queue {
         Effect::Save(Choices {
             dest: Some(self.settings.dest.clone()),
             profile: Some(self.settings.profile),
+            tutorial: (self.settings.tutorial > 0).then_some(self.settings.tutorial),
         })
     }
 

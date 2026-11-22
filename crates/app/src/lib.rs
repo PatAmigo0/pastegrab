@@ -11,6 +11,7 @@ pub mod ports;
 pub mod queue;
 pub mod runtime;
 pub mod steps;
+pub mod tutorial;
 
 pub use cancel::Cancel;
 pub use failure::Failure;

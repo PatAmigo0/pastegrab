@@ -53,6 +53,7 @@ fn run(text: &str, probe: FileProbe, fetch_failures: Vec<Result<(), Failure>>) -
         dest: PathBuf::from("/videos"),
         data: PathBuf::from("/data"),
         permits: Permits::DEFAULT,
+        tutorial: 0,
     });
     let view = Arc::new(RecordingView::default());
     let (handle, thread) = runtime::start(queue, Arc::new(ports), view.clone(), true);

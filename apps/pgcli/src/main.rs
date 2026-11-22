@@ -143,6 +143,7 @@ fn run() -> Result<ExitCode, String> {
         dest,
         data,
         permits: Permits::DEFAULT,
+        tutorial: 0,
     });
     let (handle, thread) =
         runtime::start(queue, Arc::new(ports), Arc::new(TermView::default()), true);

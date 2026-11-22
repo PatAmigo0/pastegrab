@@ -95,6 +95,7 @@ fn start() -> Result<(), String> {
             fetches: usize::from(tuning.downloads),
             ..Permits::DEFAULT
         },
+        tutorial: choices.tutorial.unwrap_or(0),
     });
     let view = Arc::new(WinView::default());
     let (core, _) = runtime::start(queue, Arc::new(ports), Arc::clone(&view) as _, false);

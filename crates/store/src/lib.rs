@@ -31,6 +31,8 @@ struct Saved {
     dest: Option<PathBuf>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     profile: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    tutorial: Option<u32>,
 }
 
 impl SettingsStore for JsonSettings {
@@ -42,6 +44,7 @@ impl SettingsStore for JsonSettings {
         Some(Choices {
             dest: saved.dest,
             profile: saved.profile.as_deref().and_then(profile),
+            tutorial: saved.tutorial,
         })
     }
 
@@ -49,6 +52,7 @@ impl SettingsStore for JsonSettings {
         let saved = Saved {
             dest: choices.dest.clone(),
             profile: choices.profile.map(|kind| name(kind).to_owned()),
+            tutorial: choices.tutorial,
         };
         let json = serde_json::to_vec_pretty(&saved).map_err(io::Error::other)?;
         write_whole(&self.path, &json)

@@ -234,6 +234,8 @@ pub struct Choices {
     pub dest: Option<PathBuf>,
     /// The profile video links start with; `None` keeps «Видео».
     pub profile: Option<ProfileKind>,
+    /// The highest tutorial version the person finished or skipped.
+    pub tutorial: Option<u32>,
 }
 
 /// Keeps the person's choices.

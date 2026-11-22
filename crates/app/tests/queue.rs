@@ -17,6 +17,7 @@ fn queue() -> Queue {
         dest: PathBuf::from("/videos"),
         data: PathBuf::from("/data"),
         permits: Permits::DEFAULT,
+        tutorial: 0,
     })
 }
 
@@ -235,15 +236,25 @@ fn a_new_folder_or_default_profile_is_saved_once() {
     let saved = Effect::Save(Choices {
         dest: Some(PathBuf::from("/elsewhere")),
         profile: Some(ProfileKind::Video),
+        tutorial: None,
     });
     assert_eq!(q.handle(Input::Dest(PathBuf::from("/elsewhere"))), [saved]);
     assert_eq!(q.handle(Input::Dest(PathBuf::from("/elsewhere"))), []);
     let saved = Effect::Save(Choices {
         dest: Some(PathBuf::from("/elsewhere")),
         profile: Some(ProfileKind::Analysis),
+        tutorial: None,
     });
     assert_eq!(
         q.handle(Input::DefaultProfile(ProfileKind::Analysis)),
         [saved]
     );
+    let saved = Effect::Save(Choices {
+        dest: Some(PathBuf::from("/elsewhere")),
+        profile: Some(ProfileKind::Analysis),
+        tutorial: Some(1),
+    });
+    assert_eq!(q.handle(Input::TutorialSeen(1)), [saved]);
+    assert_eq!(q.handle(Input::TutorialSeen(1)), []);
+    assert_eq!(q.handle(Input::TutorialSeen(0)), []);
 }
