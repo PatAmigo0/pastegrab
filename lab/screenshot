@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# screenshot VM OUT.png: saves a lab VM's screen as a PNG.
+# needs: virsh magick
+set -euo pipefail
+vm=$1 out=$2
+ppm=$(mktemp --suffix=.ppm)
+trap 'rm -f "$ppm"' EXIT
+virsh -c qemu:///system screenshot "$vm" "$ppm" >/dev/null
+magick "$ppm" "$out"

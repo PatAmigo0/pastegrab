@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# guest-gui VM PROGRAM [ARGUMENTS]: starts PROGRAM on the desktop of the user logged on in a lab
+# VM. The guest agent runs in session 0, where windows stay invisible; a scheduled task with an
+# interactive logon reaches the user's session.
+# needs: virsh
+set -euo pipefail
+vm=$1 program=$2 arguments=${3:-}
+lab=$(cd "$(dirname "$0")" && pwd)
+"$lab/guest-run" "$vm" "$(cat <<PS
+\$action = New-ScheduledTaskAction -Execute '$program' $( [ -n "$arguments" ] && printf -- "-Argument '%s'" "$arguments" )
+\$who = New-ScheduledTaskPrincipal -UserId tester -LogonType Interactive
+Register-ScheduledTask -TaskName pastegrab-gui -Action \$action -Principal \$who -Force | Out-Null
+Start-ScheduledTask -TaskName pastegrab-gui
+PS
+)" >/dev/null
