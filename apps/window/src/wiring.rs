@@ -65,13 +65,14 @@ fn start() -> Result<(), String> {
         x264_preset: tuning.preset.name(),
     };
     let runner: Arc<dyn ProcessRunner> = Arc::new(LocalRunner::new());
-    let ytdlp = YtDlp::with_direct(Arc::clone(&runner), engine, Arc::new(Direct::default()));
+    let direct = Direct::default();
+    let ytdlp = YtDlp::with_direct(Arc::clone(&runner), engine, Arc::new(direct.clone()));
     let ffmpeg = Ffmpeg::new(runner, tools);
     let settings = JsonSettings::new(data.join("settings.json"));
     let choices = settings.load().unwrap_or_default();
     let ports = Ports {
-        resolvers: vec![Box::new(Direct::default()), Box::new(ytdlp.clone())],
-        fetchers: vec![Box::new(Direct::default()), Box::new(ytdlp)],
+        resolvers: vec![Box::new(direct.clone()), Box::new(ytdlp.clone())],
+        fetchers: vec![Box::new(direct), Box::new(ytdlp)],
         probe: Box::new(ffmpeg.clone()),
         transcoder: Box::new(ffmpeg),
         files: Box::new(LocalFiles),

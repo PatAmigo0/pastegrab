@@ -121,7 +121,8 @@ fn run() -> Result<ExitCode, String> {
     let cache = data.join("cache").join("yt-dlp");
     let (engine, tools) = tools::find(options.tools.as_deref(), cache, temp)?;
     let runner: Arc<dyn ProcessRunner> = Arc::new(LocalRunner::new());
-    let ytdlp = YtDlp::with_direct(Arc::clone(&runner), engine, Arc::new(Direct::default()));
+    let direct = Direct::default();
+    let ytdlp = YtDlp::with_direct(Arc::clone(&runner), engine, Arc::new(direct.clone()));
     let ffmpeg = Ffmpeg::new(runner, tools);
     let machine = Machine {
         screen_height: options.screen_height,
@@ -130,8 +131,8 @@ fn run() -> Result<ExitCode, String> {
         return Ok(plan::run(&ytdlp, &text, options.profile, machine, &data));
     }
     let ports = Ports {
-        resolvers: vec![Box::new(Direct::default()), Box::new(ytdlp.clone())],
-        fetchers: vec![Box::new(Direct::default()), Box::new(ytdlp)],
+        resolvers: vec![Box::new(direct.clone()), Box::new(ytdlp.clone())],
+        fetchers: vec![Box::new(direct), Box::new(ytdlp)],
         probe: Box::new(ffmpeg.clone()),
         transcoder: Box::new(ffmpeg),
         files: Box::new(LocalFiles),

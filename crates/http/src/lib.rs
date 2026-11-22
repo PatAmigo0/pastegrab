@@ -144,6 +144,10 @@ impl Fetcher for Direct {
             return finish(work, &name, &part);
         }
         let mut file = File::create(&part).map_err(|e| io_failure(&e, "creating the file"))?;
+        if let Some(total) = total {
+            file.set_len(total)
+                .map_err(|e| io_failure(&e, "reserving space for the file"))?;
+        }
         file.write_all(&head[..read])
             .map_err(|e| io_failure(&e, "writing the file"))?;
 
@@ -168,6 +172,10 @@ impl Fetcher for Direct {
                 reported = Instant::now();
                 progress.report(Phase::Download, sample(done, total, started));
             }
+        }
+        if total.is_some_and(|expected| done < expected) {
+            file.set_len(done)
+                .map_err(|e| io_failure(&e, "trimming the file"))?;
         }
         progress.report(Phase::Download, sample(done, total, started));
         file.sync_all()
