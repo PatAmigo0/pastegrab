@@ -1,10 +1,33 @@
-//! Where pastegrab's tools sit: an install's `tools` folder, or `PATH` on a development machine.
+//! Where pastegrab and its tools sit: an install's folders, or `PATH` on a development machine,
+//! and on Windows the shortcuts and the Programs and Features entry that point at an install.
 
-#![forbid(unsafe_code)]
+#[cfg(windows)]
+mod shell;
+
+#[cfg(windows)]
+pub use shell::{Entry, register, unregister};
 
 use std::env::{self, consts::EXE_SUFFIX};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+
+/// `%LOCALAPPDATA%\Programs\pastegrab`, where setup installs.
+#[must_use]
+pub fn install_folder() -> Option<PathBuf> {
+    local_app_data().map(|dir| dir.join("Programs").join("pastegrab"))
+}
+
+/// `%LOCALAPPDATA%\pastegrab`: settings, caches, probe output and the sidecars' temp files.
+#[must_use]
+pub fn data_folder() -> Option<PathBuf> {
+    local_app_data().map(|dir| dir.join("pastegrab"))
+}
+
+fn local_app_data() -> Option<PathBuf> {
+    env::var_os("LOCALAPPDATA")
+        .filter(|dir| !dir.is_empty())
+        .map(PathBuf::from)
+}
 
 /// The tools a download needs.
 #[derive(Debug, Clone, PartialEq, Eq)]
