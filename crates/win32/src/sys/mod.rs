@@ -7,6 +7,7 @@ mod dpi;
 mod fade;
 mod instance;
 mod rows;
+mod settings;
 mod shell;
 mod taskbar;
 mod tray;

@@ -2,12 +2,12 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 use std::time::Duration;
 
 use pastegrab_app::ports::{ProcessRunner, SettingsStore};
-use pastegrab_app::queue::{Queue, Settings};
+use pastegrab_app::queue::{Preferences, Queue, Settings};
 use pastegrab_app::runtime::{self, Handle};
 use pastegrab_app::steps::Ports;
 use pastegrab_deploy::{cleanup, launch, machine};
@@ -19,7 +19,7 @@ use pastegrab_http::Direct;
 use pastegrab_os::{LocalFiles, LocalRunner};
 use pastegrab_store::JsonSettings;
 use pastegrab_update::Version;
-use pastegrab_win32::{Startup, WinView};
+use pastegrab_win32::{Startup, UpdateControl, WinView};
 use pastegrab_ytdlp::{Engine, YtDlp};
 
 pub fn run() -> ExitCode {
@@ -42,11 +42,10 @@ pub fn run() -> ExitCode {
 
 fn start() -> Result<(), String> {
     let text = env::args().skip(1).collect::<Vec<_>>().join("\n");
-    let Some(_instance) = pastegrab_win32::claim(&text) else {
+    let Some(instance) = pastegrab_win32::claim(&text) else {
         return Ok(());
     };
     let data = pastegrab_deploy::data_folder().ok_or("LOCALAPPDATA is unset")?;
-    let data_for_update = data.clone();
     let temp = data.join("tmp");
     fs::create_dir_all(&temp).map_err(|e| format!("{}: {e}", temp.display()))?;
     let temp = pastegrab_os::short_path(&temp);
@@ -80,12 +79,75 @@ fn start() -> Result<(), String> {
         files: Box::new(LocalFiles),
         settings: Some(Box::new(settings)),
     };
-    // A chosen folder on a drive that is gone falls back to Videos.
+    let dest = resolve_and_sweep_dest(choices.dest.as_deref(), &data)?;
+    let tutorial_seen = choices.tutorial.unwrap_or(0);
+    let preferences = Preferences {
+        clipboard: choices.clipboard.unwrap_or(true),
+        close_to_tray: choices.close_to_tray.unwrap_or(false),
+        height_cap: choices.max_height.unwrap_or(HeightCap::Screen),
+        downloads: choices
+            .downloads
+            .map_or(tuning.downloads, |n| n.clamp(1, 4)),
+    };
+    let updater: Arc<dyn UpdateControl> = Arc::new(crate::update::AppUpdater::new(data.clone()));
+    let data_for_update = data.clone();
+    let queue = Queue::new(Settings {
+        profile: choices.profile.unwrap_or(ProfileKind::Video),
+        machine: Machine {
+            screen_height: pastegrab_win32::screen_height(),
+        },
+        dest: dest.clone(),
+        data,
+        permits: Permits {
+            fetches: usize::from(preferences.downloads),
+            ..Permits::DEFAULT
+        },
+        tutorial: tutorial_seen,
+        clipboard: preferences.clipboard,
+        close_to_tray: preferences.close_to_tray,
+        height_cap: preferences.height_cap,
+        downloads_override: choices.downloads,
+    });
+    let view = Arc::new(WinView::default());
+    let (core, runtime_thread) =
+        runtime::start(queue, Arc::new(ports), Arc::clone(&view) as _, false);
+    let stopper = Stopper::new(core.clone(), runtime_thread);
+    let shutdown_hook = {
+        let stopper = stopper.clone();
+        move || stopper.stop()
+    };
+    let shown = move || {
+        confirm_version();
+        crate::update::start(data_for_update);
+    };
+    let restart = pastegrab_win32::run(
+        core,
+        view,
+        Startup {
+            dest,
+            text,
+            tutorial_seen,
+            preferences,
+            updater,
+        },
+        shown,
+        shutdown_hook,
+    )?;
+    stopper.stop();
+    drop(instance);
+    if restart {
+        crate::update::relaunch()?;
+    }
+    Ok(())
+}
+
+/// Resolves the destination folder (falling back to Videos) and sweeps leftover temp folders.
+fn resolve_and_sweep_dest(saved: Option<&Path>, data: &Path) -> Result<PathBuf, String> {
     let videos = pastegrab_win32::videos_folder()
         .or_else(|| env::home_dir().map(|home| home.join("Videos")));
-    let dest = choices
-        .dest
+    let dest = saved
         .filter(|dir| dir.is_dir())
+        .map(Path::to_path_buf)
         .or_else(|| videos.clone())
         .ok_or("no Videos folder")?;
     let install_root = env::current_exe()
@@ -95,62 +157,48 @@ fn start() -> Result<(), String> {
     if let Some(videos) = videos.as_deref() {
         sweep_dests.push(videos);
     }
-    cleanup::sweep_startup(&sweep_dests, &data, install_root.as_deref());
-    let tutorial_seen = choices.tutorial.unwrap_or(0);
-    let downloads = choices
-        .downloads
-        .map_or(tuning.downloads, |n| n.clamp(1, 4));
-    let queue = Queue::new(Settings {
-        profile: choices.profile.unwrap_or(ProfileKind::Video),
-        machine: Machine {
-            screen_height: pastegrab_win32::screen_height(),
-        },
-        dest: dest.clone(),
-        data,
-        permits: Permits {
-            fetches: usize::from(downloads),
-            ..Permits::DEFAULT
-        },
-        tutorial: tutorial_seen,
-        clipboard: choices.clipboard.unwrap_or(true),
-        close_to_tray: choices.close_to_tray.unwrap_or(false),
-        height_cap: choices.max_height.unwrap_or(HeightCap::Screen),
-        downloads_override: choices.downloads,
-    });
-    let view = Arc::new(WinView::default());
-    let (core, runtime_thread) =
-        runtime::start(queue, Arc::new(ports), Arc::clone(&view) as _, false);
-    let shutdown_handle = core.clone();
-    let shown = move || {
-        confirm_version();
-        crate::update::start(data_for_update);
-    };
-    let result = pastegrab_win32::run(
-        core,
-        view,
-        Startup {
-            dest,
-            text,
-            tutorial_seen,
-        },
-        shown,
-    );
-    wait_shutdown(shutdown_handle, runtime_thread);
-    result
+    cleanup::sweep_startup(&sweep_dests, data, install_root.as_deref());
+    Ok(dest)
 }
 
-/// Cancels active work and waits briefly for workers to clean their working folders.
-fn wait_shutdown<T: Send + 'static>(core: Handle, thread: thread::JoinHandle<T>) {
-    core.shutdown();
-    drop(core);
-    let (done_tx, done_rx) = std::sync::mpsc::sync_channel(1);
-    let _ = thread::Builder::new()
-        .name("shutdown-wait".into())
-        .spawn(move || {
-            let _ = thread.join();
-            let _ = done_tx.send(());
-        });
-    let _ = done_rx.recv_timeout(Duration::from_secs(2));
+struct Running<T> {
+    core: Handle,
+    thread: thread::JoinHandle<T>,
+}
+
+#[derive(Clone)]
+struct Stopper<T: Send + 'static> {
+    inner: Arc<Mutex<Option<Running<T>>>>,
+}
+
+impl<T: Send + 'static> Stopper<T> {
+    fn new(core: Handle, thread: thread::JoinHandle<T>) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(Some(Running { core, thread }))),
+        }
+    }
+
+    /// Cancels active work and waits briefly for workers to clean their working folders.
+    fn stop(&self) {
+        let Some(Running { core, thread }) = self
+            .inner
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take()
+        else {
+            return;
+        };
+        core.shutdown();
+        drop(core);
+        let (done_tx, done_rx) = std::sync::mpsc::sync_channel(1);
+        let _ = thread::Builder::new()
+            .name("shutdown-wait".into())
+            .spawn(move || {
+                let _ = thread.join();
+                let _ = done_tx.send(());
+            });
+        let _ = done_rx.recv_timeout(Duration::from_secs(2));
+    }
 }
 
 /// `tools` beside the `app` folder in an install, or beside the exe in a development copy.

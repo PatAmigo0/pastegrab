@@ -1,11 +1,12 @@
 use std::cell::{Cell, OnceCell, RefCell};
 use std::ffi::c_void;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
 
-use pastegrab_app::board::{Board, Change, Row};
+use pastegrab_app::board::{Activity, Board, Change, Row};
 use pastegrab_app::ports::ViewUpdate;
-use pastegrab_app::queue::{Input, Paste};
+use pastegrab_app::queue::{Input, Paste, Preferences};
 use pastegrab_app::runtime::Handle;
 use pastegrab_app::tutorial::{self as guide, Target};
 use pastegrab_domain::link::analyze;
@@ -34,16 +35,16 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{EnableWindow, VK_DELETE};
 use windows::Win32::UI::WindowsAndMessaging::{
     BN_CLICKED, BS_DEFPUSHBUTTON, BS_PUSHBUTTON, CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL,
     CBN_SELCHANGE, CBS_DROPDOWNLIST, CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT,
-    CreateWindowExW, DC_HASDEFID, DM_GETDEFID, DefWindowProcW, DispatchMessageW, EN_CHANGE,
-    ES_AUTOHSCROLL, GWLP_USERDATA, GetClientRect, GetMessageW, GetSystemMetrics, GetWindowLongPtrW,
-    GetWindowTextLengthW, GetWindowTextW, HMENU, IDC_ARROW, IsDialogMessageW, LoadCursorW,
-    MINMAXINFO, MSG, MoveWindow, NONCLIENTMETRICSW, PostQuitMessage, RegisterClassExW,
+    CreateWindowExW, DC_HASDEFID, DM_GETDEFID, DefWindowProcW, DestroyWindow, DispatchMessageW,
+    EN_CHANGE, ES_AUTOHSCROLL, GWLP_USERDATA, GetClientRect, GetMessageW, GetSystemMetrics,
+    GetWindowLongPtrW, GetWindowTextLengthW, GetWindowTextW, HMENU, IDC_ARROW, IsDialogMessageW,
+    LoadCursorW, MINMAXINFO, MSG, MoveWindow, NONCLIENTMETRICSW, PostQuitMessage, RegisterClassExW,
     SM_CXVSCROLL, SPI_GETNONCLIENTMETRICS, SW_HIDE, SW_SHOW, SW_SHOWNORMAL,
     SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SendMessageW, SetWindowLongPtrW, SetWindowTextW,
-    ShowWindow, SystemParametersInfoW, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_COMMAND,
-    WM_CREATE, WM_DESTROY, WM_GETMINMAXINFO, WM_NCCREATE, WM_NCDESTROY, WM_NOTIFY, WM_SETFONT,
-    WM_SIZE, WNDCLASSEXW, WS_CHILD, WS_CLIPCHILDREN, WS_EX_CLIENTEDGE, WS_OVERLAPPEDWINDOW,
-    WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
+    ShowWindow, SystemParametersInfoW, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE,
+    WM_COMMAND, WM_CREATE, WM_DESTROY, WM_ENDSESSION, WM_GETMINMAXINFO, WM_NCCREATE, WM_NCDESTROY,
+    WM_NOTIFY, WM_QUERYENDSESSION, WM_SETFONT, WM_SIZE, WNDCLASSEXW, WS_CHILD, WS_CLIPCHILDREN,
+    WS_EX_CLIENTEDGE, WS_OVERLAPPEDWINDOW, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
 };
 use windows::core::{HSTRING, PCWSTR, PWSTR, w};
 
@@ -67,11 +68,14 @@ use super::dpi;
 use super::fade::{self, Fade};
 use super::instance::FORWARD;
 use super::rows::{self, PaintContext, ProgressTheme, RowFades, RowHeight};
+use super::settings;
 use super::shell;
 use super::taskbar::Taskbar;
-use super::tray::{Tray, WM_TRAY};
+use super::tray::{Tray, TrayAction, WM_TRAY};
 use super::tutorial::{self, Guide};
 use crate::cell::{RowAction, scale};
+use crate::text;
+use crate::update::UpdateControl;
 
 /// The window class, which a second start looks for.
 pub(super) const CLASS: PCWSTR = w!("pastegrab");
@@ -81,7 +85,6 @@ const MENU_OPEN: i32 = 1;
 const MENU_FOLDER: i32 = 2;
 const MENU_RETRY: i32 = 3;
 const MENU_CANCEL: i32 = 4;
-use crate::text;
 
 const ID_LINK: i32 = 101;
 const ID_ANALYZE: i32 = 102;
@@ -94,9 +97,9 @@ const ID_FOLDER: i32 = 108;
 const ID_CHANGE: i32 = 109;
 const ID_CLEAR: i32 = 110;
 const ID_HELP: i32 = 111;
+const ID_SETTINGS: i32 = 112;
 
 /// What the window starts with.
-#[derive(Debug, Clone)]
 pub struct Startup {
     /// Where files go.
     pub dest: PathBuf,
@@ -104,10 +107,14 @@ pub struct Startup {
     pub text: String,
     /// The highest tutorial version the person already saw.
     pub tutorial_seen: u32,
+    /// User-editable preferences loaded at start.
+    pub preferences: Preferences,
+    /// Update status and manual check port.
+    pub updater: Arc<dyn UpdateControl>,
 }
 
 /// Shows the window, calls `shown` once it is on screen, and runs its message loop until the
-/// person closes it.
+/// person closes it. Returns `Ok(true)` when the person chose to restart into a staged update.
 ///
 /// # Errors
 ///
@@ -117,7 +124,8 @@ pub fn run(
     view: Arc<WinView>,
     startup: Startup,
     shown: impl FnOnce(),
-) -> Result<(), String> {
+    on_shutdown: impl Fn() + 'static,
+) -> Result<bool, String> {
     let common = INITCOMMONCONTROLSEX {
         dwSize: size_u32::<INITCOMMONCONTROLSEX>(),
         dwICC: ICC_LISTVIEW_CLASSES | ICC_STANDARD_CLASSES,
@@ -151,7 +159,15 @@ pub fn run(
     }
     dpi::enable();
     let dpi = dpi::for_primary();
-    let ui = Box::into_raw(Box::new(Ui::new(core, view, startup, dpi)));
+    let restart = Rc::new(Cell::new(false));
+    let ui = Box::into_raw(Box::new(Ui::new(
+        core,
+        view,
+        startup,
+        dpi,
+        Rc::clone(&restart),
+        Box::new(on_shutdown),
+    )));
     let title = HSTRING::from(RU.window_title);
     // SAFETY: `ui` stays alive until WM_NCDESTROY takes it back; the strings outlive the call.
     let hwnd = unsafe {
@@ -193,7 +209,7 @@ pub fn run(
             }
         }
     }
-    Ok(())
+    Ok(restart.get())
 }
 
 unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
@@ -224,6 +240,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
 struct Controls {
     link: HWND,
     analyze: HWND,
+    settings: HWND,
     help: HWND,
     title: HWND,
     detail: HWND,
@@ -256,6 +273,14 @@ impl Controls {
                 tab | BS_PUSHBUTTON as u32,
                 false,
                 ID_ANALYZE,
+            ),
+            settings: child(
+                hwnd,
+                w!("BUTTON"),
+                RU.settings_button,
+                tab | BS_PUSHBUTTON as u32,
+                false,
+                ID_SETTINGS,
             ),
             help: child(
                 hwnd,
@@ -371,10 +396,22 @@ struct Ui {
     high_contrast: Cell<bool>,
     clear_enabled: Cell<bool>,
     guide: Guide,
+    prefs: Cell<Preferences>,
+    updater: Arc<dyn UpdateControl>,
+    restart: Rc<Cell<bool>>,
+    force_close: Cell<bool>,
+    on_shutdown: Box<dyn Fn()>,
 }
 
 impl Ui {
-    fn new(core: Handle, view: Arc<WinView>, startup: Startup, dpi: i32) -> Self {
+    fn new(
+        core: Handle,
+        view: Arc<WinView>,
+        startup: Startup,
+        dpi: i32,
+        restart: Rc<Cell<bool>>,
+        on_shutdown: Box<dyn Fn()>,
+    ) -> Self {
         Self {
             core,
             view,
@@ -398,6 +435,11 @@ impl Ui {
             high_contrast: Cell::new(rows::high_contrast()),
             clear_enabled: Cell::new(false),
             guide: Guide::new(startup.tutorial_seen),
+            prefs: Cell::new(startup.preferences),
+            updater: startup.updater,
+            restart,
+            force_close: Cell::new(false),
+            on_shutdown,
         }
     }
 
@@ -422,7 +464,12 @@ impl Ui {
             }
             WM_CORE => self.drain(hwnd),
             created if created == self.taskbar.created() => self.taskbar.attach(hwnd),
-            WM_TRAY => self.tray.message(hwnd, lparam),
+            created if created == self.tray.created() => self.tray.reattach(hwnd),
+            WM_TRAY => {
+                if self.tray.message(hwnd, lparam) == TrayAction::Exit {
+                    self.exit_from_tray(hwnd);
+                }
+            }
             WM_TIMER if wparam.0 == fade::TIMER => {
                 let ended = self.fade.tick(hwnd);
                 if ended & fade::TUTORIAL != 0 && self.guide.finish_close() {
@@ -447,26 +494,22 @@ impl Ui {
             WM_ACTIVATE => {
                 if u32::try_from(low(wparam.0)).unwrap_or(0) != WA_INACTIVE {
                     self.tray.remove(hwnd);
-                    self.pick_up(hwnd, false);
+                    if self.prefs.get().clipboard {
+                        self.pick_up(hwnd, false);
+                    }
                 }
                 return None;
             }
             WM_PASTE_ANYWHERE => self.pick_up(hwnd, true),
             WM_CONTEXTMENU if wparam.0 == self.controls().list.0.addr() => self.context_menu(hwnd),
-            WM_COPYDATA => {
-                // SAFETY: WM_COPYDATA's lparam points to a COPYDATASTRUCT valid for this call.
-                let data = unsafe { &*(lparam.0 as *const COPYDATASTRUCT) };
-                if data.dwData == FORWARD && !data.lpData.is_null() {
-                    let units = usize::try_from(data.cbData).unwrap_or(0) / 2;
-                    // SAFETY: the sender's buffer holds `cbData` bytes of UTF-16 for this call.
-                    let text =
-                        unsafe { std::slice::from_raw_parts(data.lpData.cast::<u16>(), units) };
-                    let text = String::from_utf16_lossy(text);
-                    if !text.trim().is_empty() {
-                        self.submit(text);
-                    }
+            WM_COPYDATA => return Some(self.copy_data(hwnd, lparam)),
+            WM_CLOSE => self.close(hwnd),
+            WM_QUERYENDSESSION => return Some(LRESULT(1)),
+            WM_ENDSESSION => {
+                if wparam.0 != 0 {
+                    self.tray.remove(hwnd);
+                    (self.on_shutdown)();
                 }
-                return Some(LRESULT(1));
             }
             WM_DESTROY => {
                 self.guide.clear();
@@ -479,10 +522,90 @@ impl Ui {
         Some(LRESULT(0))
     }
 
+    fn copy_data(&self, hwnd: HWND, lparam: LPARAM) -> LRESULT {
+        // SAFETY: WM_COPYDATA's lparam points to a COPYDATASTRUCT valid for this call.
+        let data = unsafe { &*(lparam.0 as *const COPYDATASTRUCT) };
+        if data.dwData == FORWARD {
+            self.tray.unpark(hwnd);
+            if !data.lpData.is_null() {
+                let units = usize::try_from(data.cbData).unwrap_or(0) / 2;
+                // SAFETY: the sender's buffer holds `cbData` bytes of UTF-16 for this call.
+                let text = unsafe { std::slice::from_raw_parts(data.lpData.cast::<u16>(), units) };
+                let text = String::from_utf16_lossy(text);
+                if !text.trim().is_empty() {
+                    self.submit(text);
+                }
+            }
+        }
+        LRESULT(1)
+    }
+
+    fn is_busy(&self) -> bool {
+        self.board.borrow().activity() != Activity::Idle
+    }
+
+    fn close(&self, hwnd: HWND) {
+        if self.prefs.get().close_to_tray && !self.force_close.get() {
+            self.tray.park(hwnd);
+            return;
+        }
+        if !self.force_close.get()
+            && self.is_busy()
+            && !shell::ask_owned(hwnd, RU.window_title, RU.tray.close_busy)
+        {
+            return;
+        }
+        self.tray.remove(hwnd);
+        // SAFETY: `hwnd` belongs to this thread.
+        let _ = unsafe { DestroyWindow(hwnd) };
+    }
+
+    fn exit_from_tray(&self, hwnd: HWND) {
+        if self.is_busy() && !shell::ask(RU.window_title, RU.tray.close_busy) {
+            return;
+        }
+        self.force_close.set(true);
+        self.tray.remove(hwnd);
+        // SAFETY: `hwnd` belongs to this thread.
+        let _ = unsafe { DestroyWindow(hwnd) };
+    }
+
+    fn open_settings(&self, hwnd: HWND) {
+        let Some((normal, bold)) = self.fonts.borrow().as_ref().map(|f| (f.normal, f.bold)) else {
+            return;
+        };
+        let outcome = settings::open(
+            hwnd,
+            self.dpi.get(),
+            normal,
+            bold,
+            self.prefs.get(),
+            self.is_busy(),
+            Arc::clone(&self.updater),
+        );
+        match outcome {
+            settings::Outcome::Cancelled => {}
+            settings::Outcome::Saved(prefs) => {
+                self.prefs.set(prefs);
+                let _ = self.core.send(Input::Preferences(prefs));
+            }
+            settings::Outcome::Restart(prefs) => {
+                self.prefs.set(prefs);
+                let _ = self.core.send(Input::Preferences(prefs));
+                self.restart.set(true);
+                self.force_close.set(true);
+                self.tray.remove(hwnd);
+                // SAFETY: `hwnd` belongs to this thread.
+                let _ = unsafe { DestroyWindow(hwnd) };
+            }
+        }
+    }
+
     fn controls(&self) -> Controls {
         *self.controls.get().unwrap_or(&Controls {
             link: HWND::default(),
             analyze: HWND::default(),
+            settings: HWND::default(),
             help: HWND::default(),
             title: HWND::default(),
             detail: HWND::default(),
@@ -533,8 +656,8 @@ impl Ui {
     fn apply_fonts(&self, normal: HFONT, bold: HFONT) {
         let c = self.controls();
         for control in [
-            c.link, c.analyze, c.help, c.detail, c.profile, c.download, c.list, c.folder, c.change,
-            c.clear,
+            c.link, c.analyze, c.settings, c.help, c.detail, c.profile, c.download, c.list,
+            c.folder, c.change, c.clear,
         ] {
             set_font(control, normal);
         }
@@ -582,10 +705,13 @@ impl Ui {
         let (width, height) = (client.right, client.bottom);
         let (margin, gap, tall, button, wide) = (px(16), px(8), px(32), px(104), px(150));
         let help_x = width - margin - tall;
-        let analyze_x = help_x - gap - button;
+        let settings_w = px(92);
+        let settings_x = help_x - gap - settings_w;
+        let analyze_x = settings_x - gap - button;
         let link_w = analyze_x - gap - margin;
         place(c.link, margin, margin, link_w, tall);
         place(c.analyze, analyze_x, margin, button, tall);
+        place(c.settings, settings_x, margin, settings_w, tall);
         place(c.help, help_x, margin, tall, tall);
         let link_rect = RECT {
             left: margin,
@@ -701,6 +827,7 @@ impl Ui {
                 let _ = self.core.send(Input::DefaultProfile(profile));
             }
             (ID_CLEAR, BN_CLICKED) => self.clear_ended(),
+            (ID_SETTINGS, BN_CLICKED) => self.open_settings(hwnd),
             (ID_HELP, BN_CLICKED) => {
                 if let Some((normal, bold)) =
                     self.fonts.borrow().as_ref().map(|f| (f.normal, f.bold))

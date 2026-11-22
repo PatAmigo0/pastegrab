@@ -74,24 +74,29 @@ pub fn screen_height() -> u32 {
 
 /// A message box for a problem that leaves no window to show it in.
 pub fn alert(text: &str) {
-    message_box(RU.window_title, text, MB_OK | MB_ICONERROR);
+    message_box(None, RU.window_title, text, MB_OK | MB_ICONERROR);
 }
 
 /// A yes-or-no question in a message box of its own; `true` for yes.
 #[must_use]
 pub fn ask(title: &str, text: &str) -> bool {
-    message_box(title, text, MB_YESNO | MB_ICONQUESTION) == IDYES.0
+    message_box(None, title, text, MB_YESNO | MB_ICONQUESTION) == IDYES.0
+}
+
+/// A yes-or-no question owned by `owner`; `true` for yes.
+pub(super) fn ask_owned(owner: HWND, title: &str, text: &str) -> bool {
+    message_box(Some(owner), title, text, MB_YESNO | MB_ICONQUESTION) == IDYES.0
 }
 
 /// News in a message box of its own.
 pub fn inform(title: &str, text: &str) {
-    message_box(title, text, MB_OK | MB_ICONINFORMATION);
+    message_box(None, title, text, MB_OK | MB_ICONINFORMATION);
 }
 
-fn message_box(title: &str, text: &str, style: MESSAGEBOX_STYLE) -> i32 {
+fn message_box(owner: Option<HWND>, title: &str, text: &str, style: MESSAGEBOX_STYLE) -> i32 {
     let (text, title) = (HSTRING::from(text), HSTRING::from(title));
     // SAFETY: both strings outlive the call.
-    unsafe { MessageBoxW(None, &text, &title, style) }.0
+    unsafe { MessageBoxW(owner, &text, &title, style) }.0
 }
 
 /// Opens a file or folder the way Explorer would.

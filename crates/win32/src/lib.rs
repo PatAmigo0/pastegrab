@@ -7,9 +7,12 @@ mod cell;
 mod motion;
 #[cfg_attr(not(windows), allow(dead_code, reason = "the window uses it"))]
 mod text;
+pub mod update;
 
 #[cfg(windows)]
 mod sys;
+
+pub use update::{UnavailableUpdater, UpdateControl, UpdateInfo, UpdateState};
 
 #[cfg(windows)]
 pub use sys::{

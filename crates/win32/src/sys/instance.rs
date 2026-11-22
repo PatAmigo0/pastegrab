@@ -4,7 +4,8 @@ use windows::Win32::Foundation::{ERROR_ALREADY_EXISTS, GetLastError, LPARAM, WPA
 use windows::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows::Win32::System::Threading::CreateMutexW;
 use windows::Win32::UI::WindowsAndMessaging::{
-    FindWindowW, IsIconic, SW_RESTORE, SendMessageW, SetForegroundWindow, ShowWindow, WM_COPYDATA,
+    FindWindowW, IsIconic, IsWindowVisible, SW_RESTORE, SW_SHOW, SendMessageW, SetForegroundWindow,
+    ShowWindow, WM_COPYDATA,
 };
 use windows::core::{PCWSTR, w};
 
@@ -52,6 +53,9 @@ pub fn claim(text: &str) -> Option<Instance> {
     // SAFETY: `data` and `units` outlive the synchronous WM_COPYDATA, which copies them across.
     unsafe {
         if let Ok(window) = FindWindowW(CLASS, PCWSTR::null()) {
+            if !IsWindowVisible(window).as_bool() {
+                let _ = ShowWindow(window, SW_SHOW);
+            }
             if IsIconic(window).as_bool() {
                 let _ = ShowWindow(window, SW_RESTORE);
             }
