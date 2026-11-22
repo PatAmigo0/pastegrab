@@ -1,4 +1,4 @@
-use crate::{Columns, Failures, Menu, NoPlan, Notices, Setup, States, Strings, Uninstall};
+use crate::{Columns, Failures, Menu, NoPlan, Notices, Report, Setup, States, Strings, Uninstall};
 
 const KB: u64 = 1000;
 const MB: u64 = 1000 * KB;
@@ -101,6 +101,34 @@ pub const RU: Strings = Strings {
                        а эта Windows 32-разрядная.",
         needs_windows_8: "pastegrab работает на Windows 8 или новее.",
         empty: "В этой сборке установщика нет файлов программы.",
+        runtime: "Устанавливаю компоненты Windows",
+        checking: "Проверяю, что всё работает",
+        done_broken: "pastegrab установлен, но часть программы не работает",
+        details: "Подробнее о компьютере",
+        report: Report {
+            windows: |name, build| format!("Windows {name}, сборка {build}"),
+            cpu: |name, threads, features| {
+                if features.is_empty() {
+                    format!("Процессор: {name}, потоков: {threads}")
+                } else {
+                    format!("Процессор: {name}, потоков: {threads}, {features}")
+                }
+            },
+            memory: |mib| format!("Память: {}", gib(mib)),
+            disk: |mib, hdd| match hdd {
+                Some(true) => format!("Свободно на диске: {}, жёсткий диск", gib(mib)),
+                Some(false) => format!("Свободно на диске: {}, SSD", gib(mib)),
+                None => format!("Свободно на диске: {}", gib(mib)),
+            },
+            screen: |width, height| format!("Экран: {width}×{height}"),
+            works: |tool, tenths| format!("{tool}: работает, {}", seconds(tenths)),
+            encode: |tenths| format!("Кодирование секунды видео: {}", seconds(tenths)),
+            broken: |tool, reason| format!("{tool}: не работает ({reason})"),
+            tuning: |downloads, preset| {
+                format!("Загрузок одновременно: {downloads}, кодирование x264: {preset}")
+            },
+            no_ucrt: "Компонентов Windows для Python нет: их установка не удалась или была отменена",
+        },
     },
     uninstall: Uninstall {
         title: "Удаление pastegrab",
@@ -111,6 +139,20 @@ pub const RU: Strings = Strings {
         failed: "Не получилось удалить pastegrab полностью.",
     },
 };
+
+/// Binary gigabytes from MiB: whole from 10 up, with a tenth below.
+fn gib(mib: u64) -> String {
+    let tenths = mib.saturating_mul(10).saturating_add(512) / 1024;
+    if tenths >= 100 || tenths.is_multiple_of(10) {
+        format!("{} ГБ", (tenths + 5) / 10)
+    } else {
+        format!("{},{} ГБ", tenths / 10, tenths % 10)
+    }
+}
+
+fn seconds(tenths: u64) -> String {
+    format!("{},{} с", tenths / 10, tenths % 10)
+}
 
 fn size(bytes: u64) -> String {
     if bytes >= GB {

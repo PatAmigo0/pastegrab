@@ -113,6 +113,41 @@ pub struct Setup {
     pub needs_windows_8: &'static str,
     /// A build of the installer without the program's files.
     pub empty: &'static str,
+    /// The line under the heading while the VC++ redistributable runs.
+    pub runtime: &'static str,
+    /// The line under the heading while the self-test runs.
+    pub checking: &'static str,
+    /// The heading when the install worked but a tool failed its self-test.
+    pub done_broken: &'static str,
+    /// The button that shows the report.
+    pub details: &'static str,
+    /// The report under that button.
+    pub report: Report,
+}
+
+/// Setup's report about the PC and its self-test.
+#[derive(Debug)]
+pub struct Report {
+    /// The Windows line from the version's name and the build.
+    pub windows: fn(&str, &str) -> String,
+    /// The CPU line from its name, threads and features.
+    pub cpu: fn(&str, u32, &str) -> String,
+    /// Installed memory from MiB.
+    pub memory: fn(u64) -> String,
+    /// Free space in MiB and whether the system disk spins.
+    pub disk: fn(u64, Option<bool>) -> String,
+    /// The screen in pixels.
+    pub screen: fn(u32, u32) -> String,
+    /// A tool that answered, from its name with version and tenths of a second.
+    pub works: fn(&str, u64) -> String,
+    /// The test encode, from tenths of a second.
+    pub encode: fn(u64) -> String,
+    /// A tool that failed, from its name and the reason.
+    pub broken: fn(&str, &str) -> String,
+    /// The defaults, from downloads at once and the x264 preset.
+    pub tuning: fn(u8, &str) -> String,
+    /// Windows lacks the runtime the Python under yt-dlp needs.
+    pub no_ucrt: &'static str,
 }
 
 /// The job list's columns.
