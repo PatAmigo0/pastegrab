@@ -46,11 +46,12 @@ PowerShell starts with the execution policy bypassed, which lets a script call `
 ./guest-put pastegrab-w81 m0.ps1 'C:\pastegrab-lab\m0\m0.ps1'
 ```
 
-The agent runs in session 0, where windows never show. `guest-gui` starts a program on the logged-on user's desktop through an interactive scheduled task, `screenshot` saves the screen as a PNG, and `virsh send-key` presses keys. `defender-scan` copies files in, updates Defender and scans them.
+The agent runs in session 0, where windows never show. `guest-gui` starts a program on the logged-on user's desktop through an interactive scheduled task, `screenshot` saves the screen as a PNG, `click` presses the mouse at a pixel, and `virsh send-key` presses keys. A window started this way doesn't get the foreground, so a click comes before keys. `defender-scan` copies files in, updates Defender and scans them.
 
 ```sh
 ./guest-gui pastegrab-w81 'C:\pg\pastegrab-setup.exe'
 ./screenshot pastegrab-w81 /tmp/setup.png
+./click pastegrab-w81 713 215
 virsh -c qemu:///system send-key pastegrab-w81 KEY_ENTER
 ./defender-scan pastegrab-w81 ../target/win7/x86_64-win7-windows-gnu/release/pgcli.exe
 ```

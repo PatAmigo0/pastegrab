@@ -63,6 +63,12 @@ The killed job left its `.pastegrab-1` folder in the destination. 8.0 hasn't run
 
 A copy carrying the browser's internet mark, opened from Explorer, raised «Открыть файл - предупреждение системы безопасности» with «Неизвестный издатель» and «Запустить». Windows shows that dialog when SmartScreen is off, and the lab VMs have SmartScreen unset because the unattended install skipped the first-run screen that turns it on.
 
+## Window
+
+**The window, installed by the setup, ran the whole flow on the 8.1 VM.** Started with no arguments, it found a YouTube link on the clipboard and showed the card «Me at the zoo», «youtube.com · 0:19 · около 632 КБ». A second start with an archive.org link handed it to the running window and exited, leaving one process. «Скачать» started both jobs; the list showed «Загрузка 46%, 118 КБ/с» for the direct file, then «Готово» for both. The row menu's «Показать в папке» opened Explorer with the file selected, and Explorer drew thumbnails for both videos.
+
+A window that Task Scheduler starts doesn't get the foreground, so keys sent to the VM land elsewhere until a click activates it; `lab/click` does that through the USB tablet.
+
 ## YouTube's JS check
 
 **QuickJS 2026-06-04 solves YouTube's challenge in about 4.3 s on these VMs, QuickJS-NG in about 5.2 s.** The 8.0 runs shared the host with the 8.1 VM and took up to 5.7 and 7.8 s. yt-dlp kept nothing between runs, and a second probe of the same video paid the full time again. pastegrab ships Bellard's QuickJS and keeps the probe's info JSON for the fetch, which solves the challenge once per video.

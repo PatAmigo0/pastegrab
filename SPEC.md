@@ -227,7 +227,7 @@ Around the pipeline:
 - Duplicates match on `(site, id)` for known sites and on the cleaned URL otherwise. Pasting a finished link offers Open and Download again.
 - Direct-file test. For an unknown host, a one-byte ranged GET runs before any yt-dlp launch, and `Content-Type: video/*` or `audio/*` marks a direct file. A hit saves a Python start; a miss costs one round trip.
 - Probe on paste. The probe starts the moment a link is recognized, and the fetch reuses its output as section 7 describes. Title, size and plan are usually ready before the person clicks Download. Changing the profile re-runs the planner on the same probe result.
-- The clipboard is read once when the window gets focus, and a recognized link not seen before fills the input. No background clipboard listener runs.
+- The clipboard is read once when the window gets focus. Text the window hasn't seen there goes in as if pasted, and its probe starts. No background clipboard listener runs.
 - Links dragged from the browser arrive through OLE `IDropTarget`. Dropped files go to conversion.
 - In M4 a `pastegrab:` URL protocol and a bookmarklet send the current page from the browser. A protocol launch only fills the input, because any web page can fire a protocol URL.
 
@@ -408,7 +408,7 @@ The UI is Russian. The name pastegrab, format and codec names such as MP4, H.264
 
 The tutorial panel and the installer follow the same rules.
 
-- Ctrl+V anywhere pastes and analyzes, Enter downloads, Delete cancels the selected job, and Ctrl+O opens its folder.
+- Ctrl+V anywhere pastes and analyzes, Enter downloads, Delete cancels the selected job, and Ctrl+O opens its folder. A double-click opens a finished file, and a row's right-click menu holds «Открыть», «Показать в папке», «Повторить» and «Отменить», each enabled only where it applies.
 - The job list is a virtual `LVS_OWNERDATA` ListView with progress drawn in custom draw. Memory stays flat however long the history gets, and no row owns a control.
 - The taskbar button shows total progress through `ITaskbarList3`. A tray balloon announces finished jobs while the window sits in the background.
 - `SetThreadExecutionState` keeps the PC awake while jobs run and releases it once the queue is empty.
@@ -602,6 +602,8 @@ Everything but `store` exists. `pgcli` downloads and converts from YouTube, VK, 
 ### M2 Windows UI
 
 The `win32` adapter, `pastegrab-setup.exe`, the tutorial, app self-update with rollback, Telegram reports, the VM checklist. Done when his footage sources work in both lab VMs within budget, setup's report arrives in your Telegram, and an update rolls out and back in the lab.
+
+The window runs on the 8.1 VM, installed by the setup: the link box with paste-anywhere and clipboard pickup, the card with title, length, size and profile, the job list with live progress and its menu, the folder picker, and one window per user that takes the links of a second start. Fades, the tutorial, taskbar progress, the tray balloon and per-monitor DPI come next.
 
 ### M3 hardening
 
