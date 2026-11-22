@@ -179,6 +179,19 @@ impl Board {
         }
     }
 
+    /// Whether any row has ended: done, failed or cancelled.
+    #[must_use]
+    pub fn has_ended(&self) -> bool {
+        self.rows.iter().any(|row| row.state.is_over())
+    }
+
+    /// Drops the rows that ended and returns how many; their files stay where they are.
+    pub fn clear_ended(&mut self) -> usize {
+        let before = self.rows.len();
+        self.rows.retain(|row| !row.state.is_over());
+        before - self.rows.len()
+    }
+
     /// Probed jobs that wait for the download button, newest first.
     pub fn waiting(&self) -> impl Iterator<Item = &Row> {
         self.rows
@@ -331,5 +344,22 @@ mod tests {
         assert_eq!(board.rows()[0].permille(), Some(333));
         state(&mut board, 1, JobState::Fetched);
         assert_eq!(board.rows()[0].permille(), None);
+    }
+
+    #[test]
+    fn clearing_drops_ended_rows_and_keeps_live_ones() {
+        let mut board = Board::default();
+        for id in 1..=4 {
+            added(&mut board, id);
+        }
+        state(&mut board, 1, JobState::Done);
+        state(&mut board, 2, JobState::Failed(FailureKind::Network));
+        state(&mut board, 3, JobState::Fetching);
+        assert!(board.has_ended());
+        assert_eq!(board.clear_ended(), 2);
+        let left: Vec<u64> = board.rows().iter().map(|row| row.id.0).collect();
+        assert_eq!(left, [3, 4]);
+        assert!(!board.has_ended());
+        assert_eq!(state(&mut board, 1, JobState::Done), Change::Nothing);
     }
 }
