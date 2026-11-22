@@ -24,6 +24,8 @@ pub struct Strings {
     pub clear: &'static str,
     /// The button that replays the first-run guide.
     pub help: &'static str,
+    /// The button that opens the Settings dialog.
+    pub settings_button: &'static str,
     /// The job list's columns.
     pub columns: Columns,
     /// The job list's right-click menu.
@@ -62,6 +64,70 @@ pub struct Strings {
     pub uninstall: Uninstall,
     /// The five-step first-run guide.
     pub tutorial: Tutorial,
+    /// The tray menu and close confirmation.
+    pub tray: Tray,
+    /// The Settings dialog and its update controls.
+    pub settings: SettingsDialog,
+}
+
+/// Text for the system tray menu.
+#[derive(Debug)]
+pub struct Tray {
+    /// Brings the parked window back.
+    pub open: &'static str,
+    /// Closes pastegrab for good.
+    pub exit: &'static str,
+    /// Confirmation before closing while downloads are running.
+    pub close_busy: &'static str,
+}
+
+/// Text for the Settings dialog.
+#[derive(Debug)]
+pub struct SettingsDialog {
+    /// The dialog window title.
+    pub title: &'static str,
+    /// Checkbox for automatic clipboard link pickup on window focus.
+    pub clipboard: &'static str,
+    /// Checkbox for hiding the window to the tray instead of exiting.
+    pub close_to_tray: &'static str,
+    /// Label before the default video height cap dropdown.
+    pub quality: &'static str,
+    /// Choices in the quality dropdown: auto, 480p, 720p, 1080p, unlimited.
+    pub qualities: [&'static str; 5],
+    /// Label before the parallel downloads dropdown.
+    pub downloads: &'static str,
+    /// Group heading for updates.
+    pub updates_heading: &'static str,
+    /// Current version line from the version string.
+    pub version: fn(&str) -> String,
+    /// Last update check line from a formatted timestamp or fallback.
+    pub last_checked: fn(&str) -> String,
+    /// Last downloaded/installed update line from a formatted timestamp or fallback.
+    pub last_downloaded: fn(&str) -> String,
+    /// Fallback when updates have not been checked yet.
+    pub never: &'static str,
+    /// Fallback when a timestamp is unavailable.
+    pub unknown: &'static str,
+    /// Status while checking or downloading an update.
+    pub checking: &'static str,
+    /// Status when no newer version exists.
+    pub up_to_date: &'static str,
+    /// Status when a newer version is downloaded and staged.
+    pub ready: fn(&str) -> String,
+    /// Status when checking or staging failed.
+    pub failed: &'static str,
+    /// Status when running outside an installed layout.
+    pub not_installed: &'static str,
+    /// Button that checks GitHub immediately.
+    pub check_now: &'static str,
+    /// Button that restarts into the staged update.
+    pub restart_update: &'static str,
+    /// Confirmation before restarting into an update while downloads run.
+    pub restart_busy: &'static str,
+    /// Saves settings and closes the dialog.
+    pub save: &'static str,
+    /// Discards changes and closes the dialog.
+    pub cancel: &'static str,
 }
 
 /// Text for the five-step first-run guide.

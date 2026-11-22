@@ -1,6 +1,6 @@
 use crate::{
-    Columns, Failures, Menu, NoPlan, Notices, Report, RowActions, Setup, States, Strings, Tutorial,
-    Uninstall,
+    Columns, Failures, Menu, NoPlan, Notices, Report, RowActions, SettingsDialog, Setup, States,
+    Strings, Tray, Tutorial, Uninstall,
 };
 
 const KB: u64 = 1000;
@@ -16,6 +16,7 @@ pub const RU: Strings = Strings {
     change_folder: "Изменить",
     clear: "Очистить список",
     help: "?",
+    settings_button: "Настройки",
     columns: Columns {
         title: "Название",
         state: "Состояние",
@@ -159,6 +160,35 @@ pub const RU: Strings = Strings {
         next: "Дальше",
         done: "Готово",
         skip: "Пропустить",
+    },
+    tray: Tray {
+        open: "Открыть",
+        exit: "Выход",
+        close_busy: "Идёт загрузка. Прервать её и закрыть pastegrab?",
+    },
+    settings: SettingsDialog {
+        title: "Настройки",
+        clipboard: "Подхватывать ссылку из буфера",
+        close_to_tray: "Сворачивать в трей при закрытии",
+        quality: "Качество видео:",
+        qualities: ["Авто (по экрану)", "480p", "720p", "1080p", "Максимум"],
+        downloads: "Загрузок одновременно:",
+        updates_heading: "Обновления",
+        version: |v| format!("Версия: {v}"),
+        last_checked: |when| format!("Последняя проверка: {when}"),
+        last_downloaded: |when| format!("Последнее обновление: {when}"),
+        never: "ещё не проверялось",
+        unknown: "неизвестно",
+        checking: "Проверяю обновления",
+        up_to_date: "Установлена последняя версия",
+        ready: |v| format!("Обновление {v} готово к установке"),
+        failed: "Не удалось проверить обновления",
+        not_installed: "Обновления работают только в установленной версии",
+        check_now: "Проверить обновления",
+        restart_update: "Обновить и перезапустить",
+        restart_busy: "Идёт загрузка. Прервать её и перезапустить pastegrab?",
+        save: "Сохранить",
+        cancel: "Отмена",
     },
 };
 
