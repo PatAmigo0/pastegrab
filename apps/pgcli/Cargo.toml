@@ -16,5 +16,8 @@ pastegrab-http = { path = "../../crates/http" }
 pastegrab-os = { path = "../../crates/os" }
 pastegrab-ytdlp = { path = "../../crates/ytdlp" }
 
+[build-dependencies]
+pastegrab-winres = { path = "../../crates/winres" }
+
 [lints]
 workspace = true

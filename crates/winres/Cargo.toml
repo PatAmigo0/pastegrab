@@ -1,0 +1,14 @@
+[package]
+name = "pastegrab-winres"
+version = "0.1.0"
+description = "Version info and a manifest for every Windows exe, linked from a build script"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+embed-resource = "3.0.12"
+
+[lints]
+workspace = true
