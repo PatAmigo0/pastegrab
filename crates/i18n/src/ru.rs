@@ -66,6 +66,8 @@ pub const RU: Strings = Strings {
     size,
     speed,
     duration,
+    more: |n| format!("и ещё {n}"),
+    window_title: "pastegrab",
     setup: Setup {
         title: "Установка pastegrab",
         ask: "Установить pastegrab?",

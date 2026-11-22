@@ -40,6 +40,10 @@ pub struct Strings {
     pub speed: fn(u64) -> String,
     /// "2:41:04" from seconds.
     pub duration: fn(u32) -> String,
+    /// After the first title when several videos wait: "and 2 more".
+    pub more: fn(usize) -> String,
+    /// The window's title.
+    pub window_title: &'static str,
     /// The installer.
     pub setup: Setup,
 }
