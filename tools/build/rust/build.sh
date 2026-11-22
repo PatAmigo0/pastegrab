@@ -11,8 +11,13 @@ shift 2
 image=pastegrab-rust-build
 podman build -q -t "$image" "$here" >/dev/null
 # Named volumes keep the crate index and sources between runs.
+# The setup's payload comes in through these, when set.
+forward=()
+for name in PASTEGRAB_PAYLOAD PASTEGRAB_PAYLOAD_SIZE; do
+    if [ -n "${!name:-}" ]; then forward+=(-e "$name=${!name}"); fi
+done
 # A target folder of its own keeps host and container builds from rebuilding each other.
-podman run --rm \
+podman run --rm "${forward[@]}" \
     -v "$crate:/src" -v pastegrab-cargo-registry:/opt/cargo/registry -v pastegrab-cargo-git:/opt/cargo/git \
     -e CARGO_TARGET_DIR=/src/target/win7 -w /src "$image" \
     cargo build --release -Zbuild-std=std,panic_unwind --target "$target" "$@"
