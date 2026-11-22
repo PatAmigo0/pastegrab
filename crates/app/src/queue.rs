@@ -8,13 +8,26 @@ use pastegrab_domain::job::{
 };
 use pastegrab_domain::link::{Intent, Link, analyze};
 use pastegrab_domain::plan::{FetchPlan, Machine, Section, plan_fetch};
-use pastegrab_domain::profile::ProfileKind;
+use pastegrab_domain::profile::{HeightCap, ProfileKind};
 
 use crate::failure::Failure;
 use crate::ports::{Choices, Resolved, Source, ViewUpdate};
 
 /// How often a retryable failure sends a job back to the probe.
 const MAX_RETRIES: u8 = 2;
+
+/// User-editable preferences from the Settings dialog.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Preferences {
+    /// Whether focusing the window picks up a link from the clipboard.
+    pub clipboard: bool,
+    /// Whether closing the window hides it in the system tray instead of exiting.
+    pub close_to_tray: bool,
+    /// Height cap override for the default «Видео» profile.
+    pub height_cap: HeightCap,
+    /// Maximum parallel downloads (`1..=4`).
+    pub downloads: u8,
+}
 
 /// The person's choices and the machine's limits.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,6 +44,14 @@ pub struct Settings {
     pub permits: Permits,
     /// The highest tutorial version already seen.
     pub tutorial: u32,
+    /// Whether focusing the window picks up a link from the clipboard.
+    pub clipboard: bool,
+    /// Whether closing the window hides it in the system tray instead of exiting.
+    pub close_to_tray: bool,
+    /// Override for the screen-based video height cap.
+    pub height_cap: HeightCap,
+    /// Saved override for parallel downloads (`None` follows `deploy.json`).
+    pub downloads_override: Option<u8>,
 }
 
 /// A paste and the choices made with it.
@@ -69,6 +90,8 @@ pub enum Input {
     DefaultProfile(ProfileKind),
     /// The person finished or skipped this tutorial version.
     TutorialSeen(u32),
+    /// Preferences saved from the Settings dialog.
+    Preferences(Preferences),
     /// A worker finished a step.
     Done(JobId, Outcome),
     /// The program is closing; cancel active jobs and clean working folders.
@@ -263,6 +286,7 @@ impl Queue {
                 self.settings.tutorial = version;
                 fx.push(self.choices());
             }
+            Input::Preferences(prefs) => self.set_preferences(prefs, &mut fx),
             Input::Dest(_) | Input::DefaultProfile(_) | Input::TutorialSeen(_) => {}
             Input::Done(id, outcome) => self.done(id, outcome, &mut fx),
             Input::Shutdown => {
@@ -387,6 +411,7 @@ impl Queue {
 
     fn done(&mut self, id: JobId, outcome: Outcome, fx: &mut Vec<Effect>) {
         let machine = self.settings.machine;
+        let height_cap = self.settings.height_cap;
         let Some(job) = self.job(id) else {
             return;
         };
@@ -397,7 +422,12 @@ impl Queue {
         match outcome {
             Outcome::Probed(Ok(resolved)) => {
                 let profile = job.profile;
-                let planned = plan_fetch(&resolved.info, &profile.profile(), machine, job.section);
+                let planned = plan_fetch(
+                    &resolved.info,
+                    &profile.profile().with_cap(height_cap),
+                    machine,
+                    job.section,
+                );
                 let title = resolved.info.title.clone();
                 let duration = resolved.info.duration;
                 job.resolved = Some(resolved);
@@ -474,11 +504,55 @@ impl Queue {
             dest: Some(self.settings.dest.clone()),
             profile: Some(self.settings.profile),
             tutorial: (self.settings.tutorial > 0).then_some(self.settings.tutorial),
+            clipboard: (!self.settings.clipboard).then_some(false),
+            close_to_tray: self.settings.close_to_tray.then_some(true),
+            max_height: (self.settings.height_cap != HeightCap::Screen)
+                .then_some(self.settings.height_cap),
+            downloads: self.settings.downloads_override,
         })
+    }
+
+    fn set_preferences(&mut self, prefs: Preferences, fx: &mut Vec<Effect>) {
+        let downloads = prefs.downloads.clamp(1, 4);
+        let downloads_changed = usize::from(downloads) != self.settings.permits.fetches;
+        let cap_changed = prefs.height_cap != self.settings.height_cap;
+        let changed = downloads_changed
+            || cap_changed
+            || prefs.clipboard != self.settings.clipboard
+            || prefs.close_to_tray != self.settings.close_to_tray;
+        if !changed {
+            return;
+        }
+        self.settings.clipboard = prefs.clipboard;
+        self.settings.close_to_tray = prefs.close_to_tray;
+        self.settings.height_cap = prefs.height_cap;
+        if downloads_changed {
+            self.settings.permits.fetches = usize::from(downloads);
+            self.settings.downloads_override = Some(downloads);
+        }
+        fx.push(self.choices());
+        if cap_changed {
+            let jobs: Vec<(JobId, ProfileKind)> = self
+                .jobs
+                .iter()
+                .filter(|j| {
+                    matches!(j.state, JobState::Ready | JobState::Paused(Waiting::Ready))
+                        && j.profile
+                            .profile()
+                            .video
+                            .is_some_and(|v| v.cap == HeightCap::Screen)
+                })
+                .map(|j| (j.id, j.profile))
+                .collect();
+            for (id, profile) in jobs {
+                self.reprofile(id, profile, fx);
+            }
+        }
     }
 
     fn reprofile(&mut self, id: JobId, profile: ProfileKind, fx: &mut Vec<Effect>) {
         let machine = self.settings.machine;
+        let height_cap = self.settings.height_cap;
         let Some(job) = self.job(id) else {
             return;
         };
@@ -493,7 +567,12 @@ impl Queue {
         };
         let title = resolved.info.title.clone();
         let duration = resolved.info.duration;
-        let update = match plan_fetch(&resolved.info, &profile.profile(), machine, job.section) {
+        let update = match plan_fetch(
+            &resolved.info,
+            &profile.profile().with_cap(height_cap),
+            machine,
+            job.section,
+        ) {
             Ok(plan) => {
                 job.plan = Some(plan.clone());
                 ViewUpdate::Planned {

@@ -18,7 +18,7 @@ use pastegrab_app::{Cancel, Failure};
 use pastegrab_domain::job::{FailureKind, JobId, JobState, Permits};
 use pastegrab_domain::media::FileProbe;
 use pastegrab_domain::plan::Machine;
-use pastegrab_domain::profile::ProfileKind;
+use pastegrab_domain::profile::{HeightCap, ProfileKind};
 use pastegrab_testkit::{
     FakeFetcher, FakeProbe, FakeResolver, FakeTranscoder, MemFiles, RecordingView, media,
     mp4_probe, webm_probe,
@@ -58,6 +58,10 @@ fn run(text: &str, probe: FileProbe, fetch_failures: Vec<Result<(), Failure>>) -
         data: PathBuf::from("/data"),
         permits: Permits::DEFAULT,
         tutorial: 0,
+        clipboard: true,
+        close_to_tray: false,
+        height_cap: HeightCap::Screen,
+        downloads_override: None,
     });
     let view = Arc::new(RecordingView::default());
     let (handle, thread) = runtime::start(queue, Arc::new(ports), view.clone(), true);
@@ -190,6 +194,10 @@ fn cancelling_a_running_fetch_cleans_working_folders_after_worker_exits() {
         data: PathBuf::from("/data"),
         permits: Permits::DEFAULT,
         tutorial: 0,
+        clipboard: true,
+        close_to_tray: false,
+        height_cap: HeightCap::Screen,
+        downloads_override: None,
     });
     let view = Arc::new(RecordingView::default());
     let (handle, thread) = runtime::start(queue, Arc::new(ports), view, true);
@@ -240,6 +248,10 @@ fn cancelling_a_held_job_removes_its_probe_folder_right_away() {
         data: PathBuf::from("/data"),
         permits: Permits::DEFAULT,
         tutorial: 0,
+        clipboard: true,
+        close_to_tray: false,
+        height_cap: HeightCap::Screen,
+        downloads_override: None,
     });
     let view = Arc::new(RecordingView::default());
     let (handle, thread) = runtime::start(queue, Arc::new(ports), view.clone(), false);
@@ -302,6 +314,10 @@ fn shutdown_stops_running_fetch_and_cleans_before_exit() {
         data: PathBuf::from("/data"),
         permits: Permits::DEFAULT,
         tutorial: 0,
+        clipboard: true,
+        close_to_tray: false,
+        height_cap: HeightCap::Screen,
+        downloads_override: None,
     });
     let view = Arc::new(RecordingView::default());
     let (handle, thread) = runtime::start(queue, Arc::new(ports), view, false);

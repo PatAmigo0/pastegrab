@@ -139,6 +139,19 @@ pub struct Profile {
     pub audio: AudioGoal,
 }
 
+impl Profile {
+    /// Overrides a screen-based height cap while leaving fixed and audio profiles alone.
+    #[must_use]
+    pub const fn with_cap(mut self, cap: HeightCap) -> Self {
+        if let Some(video) = &mut self.video
+            && matches!(video.cap, HeightCap::Screen)
+        {
+            video.cap = cap;
+        }
+        self
+    }
+}
+
 impl ProfileKind {
     /// Every profile, in the order the format list shows them.
     pub const ALL: [Self; 6] = [
@@ -226,5 +239,36 @@ const fn video(codec: Option<VideoCodec>, cap: HeightCap, rank: Rank) -> VideoGo
         cap,
         rank,
         analysis: false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{HeightCap, ProfileKind};
+
+    #[test]
+    fn with_cap_overrides_only_screen_capped_profiles() {
+        let video = ProfileKind::Video
+            .profile()
+            .with_cap(HeightCap::AtMost(1080));
+        assert_eq!(video.video.map(|v| v.cap), Some(HeightCap::AtMost(1080)));
+
+        let small = ProfileKind::Small.profile().with_cap(HeightCap::Unlimited);
+        assert_eq!(small.video.map(|v| v.cap), Some(HeightCap::AtMost(480)));
+
+        let best = ProfileKind::BestQuality
+            .profile()
+            .with_cap(HeightCap::AtMost(720));
+        assert_eq!(best.video.map(|v| v.cap), Some(HeightCap::Unlimited));
+
+        let analysis = ProfileKind::Analysis
+            .profile()
+            .with_cap(HeightCap::AtMost(480));
+        assert_eq!(analysis.video.map(|v| v.cap), Some(HeightCap::AtMost(1080)));
+
+        let audio = ProfileKind::Audio
+            .profile()
+            .with_cap(HeightCap::AtMost(720));
+        assert_eq!(audio.video, None);
     }
 }

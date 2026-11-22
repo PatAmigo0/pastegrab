@@ -9,7 +9,7 @@ use pastegrab_domain::job::{JobId, JobState};
 use pastegrab_domain::link::Link;
 use pastegrab_domain::media::{FileProbe, MediaInfo};
 use pastegrab_domain::plan::{Convert, FetchPlan, PlanError};
-use pastegrab_domain::profile::ProfileKind;
+use pastegrab_domain::profile::{HeightCap, ProfileKind};
 
 use crate::cancel::Cancel;
 use crate::failure::Failure;
@@ -236,6 +236,14 @@ pub struct Choices {
     pub profile: Option<ProfileKind>,
     /// The highest tutorial version the person finished or skipped.
     pub tutorial: Option<u32>,
+    /// Whether focusing the window picks up a link from the clipboard; `None` keeps it on.
+    pub clipboard: Option<bool>,
+    /// Whether closing the window parks it in the system tray; `None` closes the app.
+    pub close_to_tray: Option<bool>,
+    /// Override for the «Видео» height cap; `None` fits the screen.
+    pub max_height: Option<HeightCap>,
+    /// Override for parallel downloads (`1..=4`); `None` follows `deploy.json`.
+    pub downloads: Option<u8>,
 }
 
 /// Keeps the person's choices.

@@ -8,7 +8,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use pastegrab_app::ports::{Choices, SettingsStore};
-use pastegrab_domain::profile::ProfileKind;
+use pastegrab_domain::profile::{HeightCap, ProfileKind};
 use serde::{Deserialize, Serialize};
 
 /// `settings.json` in pastegrab's data folder.
@@ -33,6 +33,14 @@ struct Saved {
     profile: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     tutorial: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    clipboard: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    close_to_tray: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    max_height: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    downloads: Option<u8>,
 }
 
 impl SettingsStore for JsonSettings {
@@ -45,6 +53,10 @@ impl SettingsStore for JsonSettings {
             dest: saved.dest,
             profile: saved.profile.as_deref().and_then(profile),
             tutorial: saved.tutorial,
+            clipboard: saved.clipboard,
+            close_to_tray: saved.close_to_tray,
+            max_height: saved.max_height.as_deref().and_then(parse_height_cap),
+            downloads: saved.downloads.filter(|n| (1..=4).contains(n)),
         })
     }
 
@@ -53,6 +65,10 @@ impl SettingsStore for JsonSettings {
             dest: choices.dest.clone(),
             profile: choices.profile.map(|kind| name(kind).to_owned()),
             tutorial: choices.tutorial,
+            clipboard: choices.clipboard,
+            close_to_tray: choices.close_to_tray,
+            max_height: choices.max_height.map(format_height_cap),
+            downloads: choices.downloads.filter(|n| (1..=4).contains(n)),
         };
         let json = serde_json::to_vec_pretty(&saved).map_err(io::Error::other)?;
         write_whole(&self.path, &json)
@@ -95,12 +111,32 @@ fn profile(name: &str) -> Option<ProfileKind> {
         .map(|(kind, _)| *kind)
 }
 
+fn format_height_cap(cap: HeightCap) -> String {
+    match cap {
+        HeightCap::Screen => "auto".to_owned(),
+        HeightCap::AtMost(height) => height.to_string(),
+        HeightCap::Unlimited => "max".to_owned(),
+    }
+}
+
+fn parse_height_cap(raw: &str) -> Option<HeightCap> {
+    match raw {
+        "auto" => Some(HeightCap::Screen),
+        "max" => Some(HeightCap::Unlimited),
+        other => other
+            .parse::<u32>()
+            .ok()
+            .filter(|&h| h > 0)
+            .map(HeightCap::AtMost),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
 
     use pastegrab_app::ports::SettingsStore;
-    use pastegrab_domain::profile::ProfileKind;
+    use pastegrab_domain::profile::{HeightCap, ProfileKind};
     use pastegrab_testkit::{TempDir, contract};
 
     use super::JsonSettings;
@@ -119,15 +155,29 @@ mod tests {
         let path = dir.path().join("settings.json");
         fs::write(&path, "{ half").expect("a write");
         assert_eq!(JsonSettings::new(path.clone()).load(), None);
-        fs::write(&path, r#"{"profile": "8k"}"#).expect("a write");
+        fs::write(
+            &path,
+            r#"{"profile": "8k", "max_height": "bad", "downloads": 9}"#,
+        )
+        .expect("a write");
         let unknown = JsonSettings::new(path.clone())
             .load()
             .expect("the rest still reads");
         assert_eq!(unknown.profile, None);
-        fs::write(&path, "\u{feff}{\"profile\": \"mp3\"}").expect("a write");
+        assert_eq!(unknown.max_height, None);
+        assert_eq!(unknown.downloads, None);
+        fs::write(
+            &path,
+            "\u{feff}{\"profile\": \"mp3\", \"max_height\": \"720\", \"downloads\": 3, \"clipboard\": false, \"close_to_tray\": true}",
+        )
+        .expect("a write");
         let marked = JsonSettings::new(path)
             .load()
             .expect("a byte order mark is fine");
         assert_eq!(marked.profile, Some(ProfileKind::AudioMp3));
+        assert_eq!(marked.max_height, Some(HeightCap::AtMost(720)));
+        assert_eq!(marked.downloads, Some(3));
+        assert_eq!(marked.clipboard, Some(false));
+        assert_eq!(marked.close_to_tray, Some(true));
     }
 }

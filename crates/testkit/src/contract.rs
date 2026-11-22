@@ -17,7 +17,7 @@ use std::time::Duration;
 use pastegrab_app::Cancel;
 use pastegrab_app::ports::{Choices, Files, Lines, ProcSpec, ProcessRunner, SettingsStore};
 use pastegrab_domain::job::FailureKind;
-use pastegrab_domain::profile::ProfileKind;
+use pastegrab_domain::profile::{HeightCap, ProfileKind};
 
 /// `place` moves without ever replacing, and `remove_tree` takes a folder and everything in it.
 /// `create` makes a file, parent folders included.
@@ -59,6 +59,10 @@ pub fn settings(store: &dyn SettingsStore) {
         dest: Some(PathBuf::from("D:\\Видео\\Забеги")),
         profile: Some(ProfileKind::Analysis),
         tutorial: Some(1),
+        clipboard: Some(false),
+        close_to_tray: Some(true),
+        max_height: Some(HeightCap::AtMost(1080)),
+        downloads: Some(3),
     };
     store.save(&first).expect("a save");
     assert_eq!(store.load(), Some(first));
@@ -66,6 +70,10 @@ pub fn settings(store: &dyn SettingsStore) {
         dest: None,
         profile: Some(ProfileKind::Audio),
         tutorial: None,
+        clipboard: None,
+        close_to_tray: None,
+        max_height: Some(HeightCap::Unlimited),
+        downloads: None,
     };
     store.save(&second).expect("a second save");
     assert_eq!(store.load(), Some(second));

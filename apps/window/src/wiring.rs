@@ -13,7 +13,7 @@ use pastegrab_app::steps::Ports;
 use pastegrab_deploy::{cleanup, launch, machine};
 use pastegrab_domain::job::Permits;
 use pastegrab_domain::plan::Machine;
-use pastegrab_domain::profile::ProfileKind;
+use pastegrab_domain::profile::{HeightCap, ProfileKind};
 use pastegrab_ffmpeg::{Ffmpeg, Tools};
 use pastegrab_http::Direct;
 use pastegrab_os::{LocalFiles, LocalRunner};
@@ -97,6 +97,9 @@ fn start() -> Result<(), String> {
     }
     cleanup::sweep_startup(&sweep_dests, &data, install_root.as_deref());
     let tutorial_seen = choices.tutorial.unwrap_or(0);
+    let downloads = choices
+        .downloads
+        .map_or(tuning.downloads, |n| n.clamp(1, 4));
     let queue = Queue::new(Settings {
         profile: choices.profile.unwrap_or(ProfileKind::Video),
         machine: Machine {
@@ -105,10 +108,14 @@ fn start() -> Result<(), String> {
         dest: dest.clone(),
         data,
         permits: Permits {
-            fetches: usize::from(tuning.downloads),
+            fetches: usize::from(downloads),
             ..Permits::DEFAULT
         },
         tutorial: tutorial_seen,
+        clipboard: choices.clipboard.unwrap_or(true),
+        close_to_tray: choices.close_to_tray.unwrap_or(false),
+        height_cap: choices.max_height.unwrap_or(HeightCap::Screen),
+        downloads_override: choices.downloads,
     });
     let view = Arc::new(WinView::default());
     let (core, runtime_thread) =

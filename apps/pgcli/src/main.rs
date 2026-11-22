@@ -22,7 +22,7 @@ use pastegrab_app::steps::Ports;
 use pastegrab_cli::TermView;
 use pastegrab_domain::job::{JobState, Permits};
 use pastegrab_domain::plan::Machine;
-use pastegrab_domain::profile::ProfileKind;
+use pastegrab_domain::profile::{HeightCap, ProfileKind};
 use pastegrab_ffmpeg::Ffmpeg;
 use pastegrab_http::Direct;
 use pastegrab_os::{LocalFiles, LocalRunner};
@@ -145,6 +145,10 @@ fn run() -> Result<ExitCode, String> {
         data,
         permits: Permits::DEFAULT,
         tutorial: 0,
+        clipboard: true,
+        close_to_tray: false,
+        height_cap: HeightCap::Screen,
+        downloads_override: None,
     });
     let (handle, thread) =
         runtime::start(queue, Arc::new(ports), Arc::new(TermView::default()), true);

@@ -4,10 +4,11 @@ use std::path::PathBuf;
 
 use pastegrab_app::Failure;
 use pastegrab_app::ports::{Choices, Resolved, Source, ViewUpdate};
-use pastegrab_app::queue::{Effect, Input, Outcome, Paste, Queue, Settings, Task};
+use pastegrab_app::queue::{Effect, Input, Outcome, Paste, Preferences, Queue, Settings, Task};
 use pastegrab_domain::job::{FailureKind, JobId, JobState, Permits, Step};
+use pastegrab_domain::media::{Format, Protocol, VideoCodec, VideoStream};
 use pastegrab_domain::plan::{Machine, PlanError};
-use pastegrab_domain::profile::ProfileKind;
+use pastegrab_domain::profile::{HeightCap, ProfileKind};
 use pastegrab_testkit::media;
 
 fn queue() -> Queue {
@@ -18,6 +19,10 @@ fn queue() -> Queue {
         data: PathBuf::from("/data"),
         permits: Permits::DEFAULT,
         tutorial: 0,
+        clipboard: true,
+        close_to_tray: false,
+        height_cap: HeightCap::Screen,
+        downloads_override: None,
     })
 }
 
@@ -305,14 +310,14 @@ fn a_new_folder_or_default_profile_is_saved_once() {
     let saved = Effect::Save(Choices {
         dest: Some(PathBuf::from("/elsewhere")),
         profile: Some(ProfileKind::Video),
-        tutorial: None,
+        ..Choices::default()
     });
     assert_eq!(q.handle(Input::Dest(PathBuf::from("/elsewhere"))), [saved]);
     assert_eq!(q.handle(Input::Dest(PathBuf::from("/elsewhere"))), []);
     let saved = Effect::Save(Choices {
         dest: Some(PathBuf::from("/elsewhere")),
         profile: Some(ProfileKind::Analysis),
-        tutorial: None,
+        ..Choices::default()
     });
     assert_eq!(
         q.handle(Input::DefaultProfile(ProfileKind::Analysis)),
@@ -322,8 +327,68 @@ fn a_new_folder_or_default_profile_is_saved_once() {
         dest: Some(PathBuf::from("/elsewhere")),
         profile: Some(ProfileKind::Analysis),
         tutorial: Some(1),
+        ..Choices::default()
     });
     assert_eq!(q.handle(Input::TutorialSeen(1)), [saved]);
     assert_eq!(q.handle(Input::TutorialSeen(1)), []);
     assert_eq!(q.handle(Input::TutorialSeen(0)), []);
+}
+
+#[test]
+fn preferences_save_once_replan_held_jobs_and_start_queued_fetches() {
+    let mut q = queue();
+    q.handle(held("https://youtu.be/AAAAAAAAAAA"));
+    let mut hd = resolved("Race");
+    hd.info.formats.push(Format {
+        id: "137".into(),
+        video: Some(VideoStream {
+            codec: VideoCodec::H264,
+            height: Some(1080),
+            fps: Some(30),
+        }),
+        audio: None,
+        size: Some(25_000_000),
+        bitrate: None,
+        protocol: Protocol::Dash,
+        drm: false,
+    });
+    let fx = q.handle(Input::Done(JobId(1), Outcome::Probed(Ok(hd))));
+    assert_eq!(planned(&fx).as_deref(), Some("136+140"));
+
+    let prefs = Preferences {
+        clipboard: false,
+        close_to_tray: true,
+        height_cap: HeightCap::AtMost(1080),
+        downloads: 3,
+    };
+    let fx = q.handle(Input::Preferences(prefs));
+    assert_eq!(started(&fx), [], "replan does not re-probe");
+    assert_eq!(planned(&fx).as_deref(), Some("137+140"));
+    assert!(fx.contains(&Effect::Save(Choices {
+        dest: Some(PathBuf::from("/videos")),
+        profile: Some(ProfileKind::Video),
+        tutorial: None,
+        clipboard: Some(false),
+        close_to_tray: Some(true),
+        max_height: Some(HeightCap::AtMost(1080)),
+        downloads: Some(3),
+    })));
+    assert_eq!(q.handle(Input::Preferences(prefs)), []);
+
+    // Raising parallel downloads starts a queued ready fetch immediately.
+    let mut q = queue();
+    q.handle(paste(
+        "https://youtu.be/AAAAAAAAAAA https://youtu.be/BBBBBBBBBBB https://youtu.be/CCCCCCCCCCC",
+    ));
+    q.handle(Input::Done(JobId(1), Outcome::Probed(Ok(resolved("A")))));
+    q.handle(Input::Done(JobId(2), Outcome::Probed(Ok(resolved("B")))));
+    q.handle(Input::Done(JobId(3), Outcome::Probed(Ok(resolved("C")))));
+    assert_eq!(q.states()[2], (JobId(3), JobState::Ready));
+    let fx = q.handle(Input::Preferences(Preferences {
+        clipboard: true,
+        close_to_tray: false,
+        height_cap: HeightCap::Screen,
+        downloads: 3,
+    }));
+    assert_eq!(started(&fx), [(JobId(3), Step::Fetch)]);
 }
