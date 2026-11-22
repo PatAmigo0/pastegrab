@@ -28,5 +28,5 @@ image=pastegrab-quickjs-build
 podman build -q -t "$image" "$here" >/dev/null
 podman run --rm \
     -e QJS_VERSION="$QJS_VERSION" -e QJS_NG_VERSION="$QJS_NG_VERSION" \
-    -v "$cache:/src:ro" -v "$out:/out" -v "$here/inner.sh:/inner.sh:ro" \
+    -v "$cache:/src:ro" -v "$out:/out" -v "$here/inner.sh:/inner.sh:ro" -v "$here:/res:ro" \
     "$image" bash /inner.sh

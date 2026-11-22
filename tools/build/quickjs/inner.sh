@@ -6,7 +6,9 @@ work=$(mktemp -d)
 cd "$work"
 
 tar xf /src/quickjs-"$QJS_VERSION".tar.xz
-make -C quickjs-"$QJS_VERSION" -j"$(nproc)" CONFIG_WIN32=y LDFLAGS=-static qjs.exe
+# Version info and a manifest; an exe without them looks worse to antivirus heuristics.
+(cd /res && x86_64-w64-mingw32-windres qjs.rc -O coff -o "$work/qjs-res.o")
+make -C quickjs-"$QJS_VERSION" -j"$(nproc)" CONFIG_WIN32=y LDFLAGS="-static $work/qjs-res.o" qjs.exe
 x86_64-w64-mingw32-strip -o /out/qjs.exe quickjs-"$QJS_VERSION"/qjs.exe
 
 # The Linux twin runs the same engine on the host for control runs.
