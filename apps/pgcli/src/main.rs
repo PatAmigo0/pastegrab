@@ -1,16 +1,17 @@
 //! pastegrab on the command line, for development and as a downloader of its own.
 //!
-//! `pgcli [--profile NAME] [--dest DIR] [--screen HEIGHT] [--plan] [LINK...]` reads links from
-//! its arguments, or from stdin without any, and prints each finished file's path. `--plan`
-//! prints what the planner picks and downloads nothing.
+//! `pgcli [--profile NAME] [--dest DIR] [--screen HEIGHT] [--tools DIR] [--plan] [LINK...]`
+//! reads links from its arguments, or from stdin without any, and prints each finished file's
+//! path. `--plan` prints what the planner picks and downloads nothing.
 
 mod plan;
+mod tools;
 
 use std::env;
 use std::ffi::OsString;
 use std::fs;
 use std::io::{self, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 
@@ -22,15 +23,18 @@ use pastegrab_cli::TermView;
 use pastegrab_domain::job::{JobState, Permits};
 use pastegrab_domain::plan::Machine;
 use pastegrab_domain::profile::ProfileKind;
-use pastegrab_ffmpeg::{Ffmpeg, Tools};
+use pastegrab_ffmpeg::Ffmpeg;
 use pastegrab_http::Direct;
 use pastegrab_os::{LocalFiles, LocalRunner};
-use pastegrab_ytdlp::{Engine, YtDlp};
+use pastegrab_ytdlp::YtDlp;
 
 const USAGE: &str = "usage: pgcli [--profile video|best|small|audio|mp3|analysis] [--dest DIR] \
-                     [--screen HEIGHT] [--plan] [LINK...]";
+                     [--screen HEIGHT] [--tools DIR] [--plan] [LINK...]";
 
 fn main() -> ExitCode {
+    if let Err(e) = pastegrab_os::harden_dll_search() {
+        let _ = writeln!(io::stderr(), "pgcli: DLL search stays as it was: {e}");
+    }
     match run() {
         Ok(code) => code,
         Err(message) => {
@@ -44,6 +48,7 @@ struct Options {
     profile: Option<ProfileKind>,
     dest: PathBuf,
     screen_height: u32,
+    tools: Option<PathBuf>,
     plan: bool,
     links: Vec<String>,
 }
@@ -53,6 +58,7 @@ fn options() -> Result<Options, String> {
         profile: None,
         dest: env::current_dir().map_err(|e| format!("the current folder: {e}"))?,
         screen_height: 1080,
+        tools: None,
         plan: false,
         links: Vec::new(),
     };
@@ -69,6 +75,7 @@ fn options() -> Result<Options, String> {
                     .and_then(|h| h.parse().ok())
                     .ok_or_else(|| format!("--screen takes a height, not {}", height.display()))?;
             }
+            Some("--tools") => options.tools = Some(PathBuf::from(value()?)),
             Some("--plan") => options.plan = true,
             Some("-h" | "--help") => return Err(USAGE.to_owned()),
             Some(link) => options.links.push(link.to_owned()),
@@ -101,22 +108,20 @@ fn run() -> Result<ExitCode, String> {
     } else {
         options.links.join("\n")
     };
-    let dest =
-        fs::canonicalize(&options.dest).map_err(|e| format!("{}: {e}", options.dest.display()))?;
+    // `canonicalize` gives `\\?\` paths on Windows, which ffmpeg and people misread.
+    let dest = std::path::absolute(&options.dest)
+        .ok()
+        .filter(|dest| dest.is_dir())
+        .ok_or_else(|| format!("{} is not a folder", options.dest.display()))?;
     let data = data_dir()?;
     let temp = data.join("tmp");
     fs::create_dir_all(&temp).map_err(|e| format!("{}: {e}", temp.display()))?;
 
-    let ffmpeg = find("ffmpeg")?;
-    let engine = Engine {
-        ffmpeg_dir: ffmpeg.parent().map(Path::to_owned),
-        ca_file: Some(PathBuf::from("/etc/ssl/certs/ca-certificates.crt")).filter(|f| f.is_file()),
-        temp_dir: Some(temp),
-        ..Engine::new(find("yt-dlp")?, data.join("cache").join("yt-dlp"))
-    };
-    let tools = Tools {
-        ffmpeg,
-        ffprobe: find("ffprobe")?,
+    let temp = pastegrab_os::short_path(&temp);
+    let cache = data.join("cache").join("yt-dlp");
+    let (engine, tools) = match &options.tools {
+        Some(dir) => tools::bundled(dir, cache, temp)?,
+        None => tools::from_path(cache, temp)?,
     };
     let runner: Arc<dyn ProcessRunner> = Arc::new(LocalRunner::new());
     let ytdlp = YtDlp::new(Arc::clone(&runner), engine);
@@ -162,19 +167,15 @@ fn run() -> Result<ExitCode, String> {
 }
 
 fn data_dir() -> Result<PathBuf, String> {
-    let base = env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .filter(|dir| dir.is_absolute())
-        .or_else(|| env::home_dir().map(|home| home.join(".local").join("share")))
-        .ok_or("no home folder")?;
-    Ok(base.join("pastegrab"))
-}
-
-fn find(name: &str) -> Result<PathBuf, String> {
-    env::var_os("PATH")
-        .iter()
-        .flat_map(env::split_paths)
-        .map(|dir| dir.join(name))
-        .find(|path| path.is_file())
-        .ok_or_else(|| format!("{name} is not on PATH"))
+    let base = if cfg!(windows) {
+        env::var_os("LOCALAPPDATA").map(PathBuf::from)
+    } else {
+        env::var_os("XDG_DATA_HOME")
+            .map(PathBuf::from)
+            .filter(|dir| dir.is_absolute())
+            .or_else(|| env::home_dir().map(|home| home.join(".local").join("share")))
+    };
+    Ok(base
+        .ok_or("no folder for pastegrab's data")?
+        .join("pastegrab"))
 }
