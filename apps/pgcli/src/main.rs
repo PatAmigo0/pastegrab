@@ -119,10 +119,7 @@ fn run() -> Result<ExitCode, String> {
 
     let temp = pastegrab_os::short_path(&temp);
     let cache = data.join("cache").join("yt-dlp");
-    let (engine, tools) = match &options.tools {
-        Some(dir) => tools::bundled(dir, cache, temp)?,
-        None => tools::from_path(cache, temp)?,
-    };
+    let (engine, tools) = tools::find(options.tools.as_deref(), cache, temp)?;
     let runner: Arc<dyn ProcessRunner> = Arc::new(LocalRunner::new());
     let ytdlp = YtDlp::new(Arc::clone(&runner), engine);
     let ffmpeg = Ffmpeg::new(runner, tools);

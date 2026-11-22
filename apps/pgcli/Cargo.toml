@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 pastegrab-app = { path = "../../crates/app" }
 pastegrab-cli = { path = "../../crates/cli" }
+pastegrab-deploy = { path = "../../crates/deploy" }
 pastegrab-domain = { path = "../../crates/domain" }
 pastegrab-ffmpeg = { path = "../../crates/ffmpeg" }
 pastegrab-http = { path = "../../crates/http" }
