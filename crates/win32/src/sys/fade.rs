@@ -89,7 +89,7 @@ fn set_alpha(window: HWND, alpha: u8) {
     let _ = unsafe { SetLayeredWindowAttributes(window, COLORREF(0), alpha, LWA_ALPHA) };
 }
 
-fn animations_on() -> bool {
+pub(super) fn animations_on() -> bool {
     let mut on = BOOL(1);
     // SAFETY: `on` is writable and outlives the call.
     let read = unsafe {

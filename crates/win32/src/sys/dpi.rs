@@ -99,8 +99,3 @@ fn system_dpi() -> i32 {
         if dpi > 0 { dpi } else { 96 }
     }
 }
-
-/// Scales a 96-DPI pixel measurement to `dpi`.
-pub(super) const fn scale(value: i32, dpi: i32) -> i32 {
-    value * dpi / 96
-}

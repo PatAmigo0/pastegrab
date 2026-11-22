@@ -2,6 +2,8 @@
 //! everywhere; the window itself exists only on Windows.
 
 #[cfg_attr(not(windows), allow(dead_code, reason = "the window uses it"))]
+mod cell;
+#[cfg_attr(not(windows), allow(dead_code, reason = "the window uses it"))]
 mod motion;
 #[cfg_attr(not(windows), allow(dead_code, reason = "the window uses it"))]
 mod text;

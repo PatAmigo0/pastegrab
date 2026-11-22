@@ -26,8 +26,8 @@ use windows::Win32::UI::Controls::{
     LVM_GETNEXTITEM, LVM_INSERTCOLUMNW, LVM_REDRAWITEMS, LVM_SETCOLUMNWIDTH,
     LVM_SETEXTENDEDLISTVIEWSTYLE, LVM_SETITEMCOUNT, LVN_GETDISPINFOW, LVN_ITEMACTIVATE,
     LVN_KEYDOWN, LVNI_SELECTED, LVS_EX_DOUBLEBUFFER, LVS_EX_FULLROWSELECT, LVS_NOSORTHEADER,
-    LVS_OWNERDATA, LVS_REPORT, LVS_SHOWSELALWAYS, LVS_SINGLESEL, LVSICF_NOSCROLL, NMHDR,
-    NMITEMACTIVATE, NMLVDISPINFOW, NMLVKEYDOWN, WC_LISTVIEWW,
+    LVS_OWNERDATA, LVS_REPORT, LVS_SHAREIMAGELISTS, LVS_SHOWSELALWAYS, LVS_SINGLESEL,
+    LVSICF_NOSCROLL, NM_CLICK, NMHDR, NMITEMACTIVATE, NMLVDISPINFOW, NMLVKEYDOWN, WC_LISTVIEWW,
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::{EnableWindow, VK_DELETE};
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -61,13 +61,14 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 use super::bridge::{WM_CORE, WinView};
-use super::dpi::{self, scale};
+use super::dpi;
 use super::fade::{self, Fade};
 use super::instance::FORWARD;
-use super::rows;
+use super::rows::{self, RowFades, RowHeight};
 use super::shell;
 use super::taskbar::Taskbar;
 use super::tray::{Tray, WM_TRAY};
+use crate::cell::{RowAction, scale};
 
 /// The window class, which a second start looks for.
 pub(super) const CLASS: PCWSTR = w!("pastegrab");
@@ -275,7 +276,8 @@ impl Controls {
                     | LVS_OWNERDATA
                     | LVS_SINGLESEL
                     | LVS_SHOWSELALWAYS
-                    | LVS_NOSORTHEADER,
+                    | LVS_NOSORTHEADER
+                    | LVS_SHAREIMAGELISTS,
                 true,
                 ID_LIST,
             ),
@@ -347,6 +349,9 @@ struct Ui {
     taskbar: Taskbar,
     tray: Tray,
     fade: Fade,
+    row_fades: RowFades,
+    button_widths: Cell<(i32, i32)>,
+    row_height: RefCell<Option<RowHeight>>,
 }
 
 impl Ui {
@@ -367,6 +372,9 @@ impl Ui {
             taskbar: Taskbar::new(),
             tray: Tray::new(),
             fade: Fade::default(),
+            row_fades: RowFades::default(),
+            button_widths: Cell::new((64, 48)),
+            row_height: RefCell::new(None),
         }
     }
 
@@ -393,6 +401,11 @@ impl Ui {
             created if created == self.taskbar.created() => self.taskbar.attach(hwnd),
             WM_TRAY => self.tray.message(hwnd, lparam),
             WM_TIMER if wparam.0 == fade::TIMER => self.fade.tick(hwnd),
+            WM_TIMER if wparam.0 == rows::TIMER => {
+                let board = self.board.borrow();
+                self.row_fades
+                    .tick(hwnd, self.controls().list, board.rows());
+            }
             WM_ACTIVATE => {
                 if u32::try_from(low(wparam.0)).unwrap_or(0) != WA_INACTIVE {
                     self.tray.remove(hwnd);
@@ -449,7 +462,12 @@ impl Ui {
         let _ = self.controls.set(controls);
         let next_fonts = fonts(dpi);
         self.apply_fonts(next_fonts.normal, next_fonts.bold);
+        self.button_widths
+            .set(rows::measure_buttons(controls.list, next_fonts.normal));
         let _ = self.fonts.replace(Some(next_fonts));
+        let _ = self
+            .row_height
+            .replace(RowHeight::apply(controls.list, dpi));
         enable(controls.clear, false);
         cue_banner(controls.link, RU.paste_hint);
         set_list_style(controls.list, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
@@ -485,7 +503,11 @@ impl Ui {
         self.dpi.set(next);
         let next_fonts = fonts(next);
         self.apply_fonts(next_fonts.normal, next_fonts.bold);
+        let list = self.controls().list;
+        self.button_widths
+            .set(rows::measure_buttons(list, next_fonts.normal));
         let _old = self.fonts.replace(Some(next_fonts));
+        let _old_height = self.row_height.replace(RowHeight::apply(list, next));
         // SAFETY: WM_DPICHANGED's lparam points to Windows' suggested RECT for this call.
         let rect = unsafe { &*(lparam.0 as *const RECT) };
         // SAFETY: `hwnd` belongs to this thread.
@@ -645,18 +667,39 @@ impl Ui {
                     header.hwndFrom,
                     draw,
                     board.rows(),
+                    &self.row_fades,
                     self.dpi.get(),
+                    self.button_widths.get(),
                 ));
+            }
+            NM_CLICK => {
+                // SAFETY: NM_CLICK on a list view comes with an NMITEMACTIVATE.
+                let item = unsafe { &*(lparam.0 as *const NMITEMACTIVATE) };
+                self.row_click(header.hwndFrom, item);
             }
             LVN_ITEMACTIVATE => {
                 // SAFETY: LVN_ITEMACTIVATE comes with an NMITEMACTIVATE.
                 let item = unsafe { &*(lparam.0 as *const NMITEMACTIVATE) };
                 let file = {
                     let board = self.board.borrow();
-                    let row = usize::try_from(item.iItem)
-                        .ok()
-                        .and_then(|i| board.rows().get(i));
-                    row.and_then(|row| row.file.clone())
+                    let index = usize::try_from(item.iItem).ok();
+                    let row = index.and_then(|i| board.rows().get(i));
+                    let on_button = index.zip(row).is_some_and(|(i, row)| {
+                        rows::hit(
+                            header.hwndFrom,
+                            row,
+                            i,
+                            item.ptAction,
+                            self.dpi.get(),
+                            self.button_widths.get(),
+                        )
+                        .is_some()
+                    });
+                    if on_button {
+                        None
+                    } else {
+                        row.and_then(|row| row.file.clone())
+                    }
                 };
                 if let Some(file) = file {
                     shell::open(&file);
@@ -681,6 +724,37 @@ impl Ui {
             _ => return None,
         }
         Some(LRESULT(0))
+    }
+
+    fn row_click(&self, list: HWND, item: &NMITEMACTIVATE) {
+        let Ok(index) = usize::try_from(item.iItem) else {
+            return;
+        };
+        let picked = {
+            let board = self.board.borrow();
+            let Some(row) = board.rows().get(index) else {
+                return;
+            };
+            let action = rows::hit(
+                list,
+                row,
+                index,
+                item.ptAction,
+                self.dpi.get(),
+                self.button_widths.get(),
+            );
+            action.map(|action| (action, row.id, row.file.clone()))
+        };
+        match picked {
+            Some((RowAction::Cancel, id, _)) => {
+                let _ = self.core.send(Input::Cancel(id));
+            }
+            Some((RowAction::Open, _, Some(file))) if file.exists() => shell::open(&file),
+            Some((RowAction::Folder, _, Some(file))) if file.exists() => {
+                shell::show_in_folder(&file);
+            }
+            _ => {}
+        }
     }
 
     fn default_button(&self) -> i32 {
@@ -711,22 +785,40 @@ impl Ui {
     fn drain(&self, hwnd: HWND) {
         let (updates, progress) = self.view.drain();
         let mut added = false;
+        let mut added_ids = Vec::new();
+        let mut finished_ids = Vec::new();
         let mut card = false;
         let mut rows = Vec::new();
         let mut ended = None;
         let (count, notice) = {
             let mut board = self.board.borrow_mut();
             for update in updates {
+                let added_id = match update {
+                    ViewUpdate::Added { id, .. } => Some(id),
+                    _ => None,
+                };
+                let finished_id = match update {
+                    ViewUpdate::Finished { id, .. } => Some(id),
+                    _ => None,
+                };
                 let ends = matches!(
                     update,
                     ViewUpdate::Finished { .. } | ViewUpdate::Failed { .. }
                 );
                 match board.apply(update) {
-                    Change::Added => added = true,
+                    Change::Added => {
+                        added = true;
+                        if let Some(id) = added_id {
+                            added_ids.push(id);
+                        }
+                    }
                     Change::Row(index) => {
                         rows.push(index);
                         card = true;
                         ended = ends.then_some(index).or(ended);
+                        if let Some(id) = finished_id {
+                            finished_ids.push(id);
+                        }
                     }
                     Change::NoLinks => {
                         self.notice.set(RU.no_links);
@@ -745,6 +837,12 @@ impl Ui {
                 .and_then(|row| text::notice(row, &RU));
             (board.rows().len(), notice)
         };
+        for id in added_ids {
+            self.row_fades.add(hwnd, id);
+        }
+        for id in finished_ids {
+            self.row_fades.finish(hwnd, id);
+        }
         if let Some(notice) = notice {
             self.tray.announce(hwnd, &notice);
         }
