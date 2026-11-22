@@ -2,11 +2,13 @@
 //! folder, and each version of the window in `app\<version>\`.
 
 use std::env::consts::EXE_SUFFIX;
-use std::fs::{self, File};
-use std::io::{self, Write};
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 
 use pastegrab_update::{Launch, Version};
+
+use crate::files::write_whole;
 
 const APP: &str = "app";
 const STATE: &str = "state.json";
@@ -45,12 +47,7 @@ pub fn read_state(root: &Path) -> Option<Launch> {
 /// Errors from the file system.
 pub fn write_state(root: &Path, launch: &Launch) -> io::Result<()> {
     let json = serde_json::to_vec_pretty(launch).map_err(io::Error::other)?;
-    let temp = root.join("state.json.tmp");
-    let mut file = File::create(&temp)?;
-    file.write_all(&json)?;
-    file.sync_all()?;
-    drop(file);
-    fs::rename(&temp, root.join(STATE))
+    write_whole(&root.join(STATE), &json)
 }
 
 /// The saved state while its version is on disk, otherwise a fresh one for the newest version

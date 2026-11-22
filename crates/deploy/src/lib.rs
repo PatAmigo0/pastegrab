@@ -1,6 +1,7 @@
 //! Where pastegrab and its tools sit: an install's folders, or `PATH` on a development machine,
 //! and on Windows the shortcuts and the Programs and Features entry that point at an install.
 
+mod files;
 pub mod launch;
 #[cfg(windows)]
 mod sys;
