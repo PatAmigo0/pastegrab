@@ -786,7 +786,7 @@ dependencies = [
 
 [[package]]
 name = "pastegrab-window"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "pastegrab-app",
  "pastegrab-deploy",
