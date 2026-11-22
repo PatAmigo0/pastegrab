@@ -501,6 +501,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "pastegrab-i18n"
+version = "0.1.0"
+
+[[package]]
 name = "pastegrab-os"
 version = "0.1.0"
 dependencies = [

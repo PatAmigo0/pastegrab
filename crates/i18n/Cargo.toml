@@ -1,0 +1,11 @@
+[package]
+name = "pastegrab-i18n"
+version = "0.1.0"
+description = "Every string the person sees, one table per language"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
