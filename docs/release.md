@@ -2,6 +2,10 @@
 
 **Every file a release ships goes through Defender in both lab VMs and through VirusTotal, and each false positive gets reported before he receives the release.** An unknown, unsigned exe is what antivirus heuristics distrust most, and pastegrab ships several.
 
+## Signing key
+
+**`keys/release.pub` is the minisign key every app update must be signed with, and the app carries it.** The secret key and its password stay in your password manager, never in the repository. Updates signed by any other key are refused, so losing the secret key ends updates until he reinstalls from a new setup.
+
 ## Antivirus
 
 1. `lab/defender-scan pastegrab-w81 FILE...`, then the same with `pastegrab-w80`. The script updates Defender first and prints its engine and definition versions with the verdict.
