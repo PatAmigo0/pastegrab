@@ -125,9 +125,78 @@ fn a_cancel_stops_the_worker_and_its_late_result_is_ignored() {
     q.handle(paste("https://youtu.be/AAAAAAAAAAA"));
     let fx = q.handle(Input::Cancel(JobId(1)));
     assert_eq!(fx[0], Effect::Stop(JobId(1)));
+    assert!(fx.contains(&Effect::Clean(
+        JobId(1),
+        vec![PathBuf::from("/data/jobs/1")]
+    )));
     let fx = q.handle(Input::Done(JobId(1), Outcome::Probed(Ok(resolved("Race")))));
     assert_eq!(fx, []);
     assert_eq!(q.states()[0].1, JobState::Cancelled);
+}
+
+#[test]
+fn cancelling_a_fetch_cleans_its_original_folder_and_done_jobs_stay_untouched() {
+    let mut q = queue();
+    q.handle(paste("https://youtu.be/AAAAAAAAAAA"));
+    q.handle(Input::Done(JobId(1), Outcome::Probed(Ok(resolved("Race")))));
+    q.handle(Input::Dest(PathBuf::from("/elsewhere")));
+    let fx = q.handle(Input::Cancel(JobId(1)));
+    assert_eq!(fx[0], Effect::Stop(JobId(1)));
+    assert!(fx.contains(&Effect::Clean(
+        JobId(1),
+        vec![
+            PathBuf::from("/videos/.pastegrab-1"),
+            PathBuf::from("/data/jobs/1"),
+        ],
+    )));
+
+    let mut q = queue();
+    q.handle(paste("https://youtu.be/AAAAAAAAAAA"));
+    q.handle(Input::Done(JobId(1), Outcome::Probed(Ok(resolved("Race")))));
+    q.handle(Input::Done(
+        JobId(1),
+        Outcome::Fetched(Ok(PathBuf::from("/videos/.pastegrab-1/a.mp4"))),
+    ));
+    q.handle(Input::Done(
+        JobId(1),
+        Outcome::Converted(Ok(PathBuf::from("/videos/Race.mp4"))),
+    ));
+    assert_eq!(q.handle(Input::Cancel(JobId(1))), []);
+}
+
+#[test]
+fn shutdown_stops_active_jobs_and_cleans_unfinished_folders() {
+    let mut q = queue();
+    q.handle(paste(
+        "https://youtu.be/AAAAAAAAAAA https://youtu.be/BBBBBBBBBBB",
+    ));
+    q.handle(Input::Done(JobId(1), Outcome::Probed(Ok(resolved("One")))));
+    let full = Failure::new(FailureKind::DiskFull, "no space");
+    q.handle(Input::Done(JobId(2), Outcome::Probed(Err(full))));
+
+    let fx = q.handle(Input::Shutdown);
+    assert!(fx.contains(&Effect::Stop(JobId(1))));
+    assert!(fx.contains(&Effect::Clean(
+        JobId(1),
+        vec![
+            PathBuf::from("/videos/.pastegrab-1"),
+            PathBuf::from("/data/jobs/1"),
+        ],
+    )));
+    assert!(fx.contains(&Effect::Clean(
+        JobId(2),
+        vec![PathBuf::from("/data/jobs/2")],
+    )));
+    assert_eq!(started(&fx), []);
+    assert_eq!(
+        q.states(),
+        [
+            (JobId(1), JobState::Cancelled),
+            (JobId(2), JobState::Failed(FailureKind::DiskFull)),
+        ]
+    );
+    // A second shutdown does not emit duplicate cleanups.
+    assert_eq!(q.handle(Input::Shutdown), []);
 }
 
 #[test]

@@ -71,6 +71,8 @@ pub enum Input {
     TutorialSeen(u32),
     /// A worker finished a step.
     Done(JobId, Outcome),
+    /// The program is closing; cancel active jobs and clean working folders.
+    Shutdown,
 }
 
 /// What a worker reports for its step.
@@ -111,6 +113,8 @@ pub enum Effect {
     Start(JobId, Task),
     /// Cancel the job's running step.
     Stop(JobId),
+    /// Remove working folders for a cancelled job once its worker has exited.
+    Clean(JobId, Vec<PathBuf>),
     /// Tell the view.
     Show(ViewUpdate),
     /// Keep the person's choices for the next start.
@@ -190,7 +194,9 @@ struct Job {
     state: JobState,
     resolved: Option<Resolved>,
     plan: Option<FetchPlan>,
+    fetch_dir: Option<PathBuf>,
     fetched: Option<PathBuf>,
+    cleaned: bool,
     retries: u8,
     impersonate: bool,
     held: bool,
@@ -229,10 +235,13 @@ impl Queue {
             Input::Paste(paste) => self.paste(&paste, &mut fx),
             Input::Cancel(id) => self.interrupt(id, JobEvent::Cancel, &mut fx),
             Input::Pause(id) => self.interrupt(id, JobEvent::Pause, &mut fx),
-            Input::Resume(id) => self.apply(id, JobEvent::Resume, &mut fx),
+            Input::Resume(id) => {
+                self.apply(id, JobEvent::Resume, &mut fx);
+            }
             Input::Retry(id) => {
                 if let Some(job) = self.job(id) {
                     job.retries = 0;
+                    job.cleaned = false;
                 }
                 self.apply(id, JobEvent::Retry, &mut fx);
             }
@@ -256,6 +265,10 @@ impl Queue {
             }
             Input::Dest(_) | Input::DefaultProfile(_) | Input::TutorialSeen(_) => {}
             Input::Done(id, outcome) => self.done(id, outcome, &mut fx),
+            Input::Shutdown => {
+                self.shutdown(&mut fx);
+                return fx;
+            }
         }
         self.start_steps(&mut fx);
         fx
@@ -311,7 +324,9 @@ impl Queue {
                 state: JobState::Queued,
                 resolved: None,
                 plan: None,
+                fetch_dir: None,
                 fetched: None,
+                cleaned: false,
                 retries: 0,
                 impersonate: false,
                 held: paste.hold,
@@ -327,18 +342,47 @@ impl Queue {
         if running {
             fx.push(Effect::Stop(id));
         }
-        self.apply(id, event, fx);
+        let changed = self.apply(id, event, fx);
+        if changed && event == JobEvent::Cancel {
+            self.clean_job(id, fx);
+        }
     }
 
-    fn apply(&mut self, id: JobId, event: JobEvent, fx: &mut Vec<Effect>) {
+    fn clean_job(&mut self, id: JobId, fx: &mut Vec<Effect>) {
+        let data = self.settings.data.clone();
         let Some(job) = self.job(id) else {
             return;
         };
-        let Some(state) = job.state.next(event) else {
+        if job.cleaned || job.state == JobState::Done {
             return;
+        }
+        job.cleaned = true;
+        let mut dirs = Vec::with_capacity(2);
+        if let Some(dir) = job.fetch_dir.take() {
+            dirs.push(dir);
+        }
+        dirs.push(data.join("jobs").join(id.0.to_string()));
+        fx.push(Effect::Clean(id, dirs));
+    }
+
+    fn shutdown(&mut self, fx: &mut Vec<Effect>) {
+        let ids: Vec<JobId> = self.jobs.iter().map(|j| j.id).collect();
+        for id in ids {
+            self.interrupt(id, JobEvent::Cancel, fx);
+            self.clean_job(id, fx);
+        }
+    }
+
+    fn apply(&mut self, id: JobId, event: JobEvent, fx: &mut Vec<Effect>) -> bool {
+        let Some(job) = self.job(id) else {
+            return false;
+        };
+        let Some(state) = job.state.next(event) else {
+            return false;
         };
         job.state = state;
         fx.push(Effect::Show(ViewUpdate::State { id, state }));
+        true
     }
 
     fn done(&mut self, id: JobId, outcome: Outcome, fx: &mut Vec<Effect>) {
@@ -492,32 +536,40 @@ impl Queue {
         }
     }
 
-    fn task(&self, id: JobId, step: Step) -> Option<Task> {
-        let job = self.jobs.iter().find(|j| j.id == id)?;
+    fn task(&mut self, id: JobId, step: Step) -> Option<Task> {
+        let data = self.settings.data.clone();
+        let dest = self.settings.dest.clone();
+        let job = self.jobs.iter_mut().find(|j| j.id == id)?;
         let name = id.0.to_string();
-        let probe_dir = self.settings.data.join("jobs").join(&name);
+        let probe_dir = data.join("jobs").join(&name);
         // One folder per job, with no shared parent left behind in the destination.
-        let fetch_dir = self.settings.dest.join(format!(".pastegrab-{name}"));
+        let fetch_dir = dest.join(format!(".pastegrab-{name}"));
         let task = match step {
             Step::Probe => Task::Probe(ProbeTask {
                 link: job.link.clone(),
                 work_dir: probe_dir,
                 impersonate: job.impersonate,
             }),
-            Step::Fetch => Task::Fetch(FetchTask {
-                plan: job.plan.clone()?,
-                source: job.resolved.as_ref()?.source.clone(),
-                work_dir: fetch_dir,
-            }),
+            Step::Fetch => {
+                let plan = job.plan.clone()?;
+                let source = job.resolved.as_ref()?.source.clone();
+                job.fetch_dir = Some(fetch_dir.clone());
+                Task::Fetch(FetchTask {
+                    plan,
+                    source,
+                    work_dir: fetch_dir,
+                })
+            }
             Step::Convert => {
                 let resolved = job.resolved.as_ref()?;
+                let fetch_dir = job.fetch_dir.clone().unwrap_or(fetch_dir);
                 Task::Convert(ConvertTask {
                     file: job.fetched.clone()?,
                     profile: job.profile,
                     title: resolved.info.title.clone(),
                     fallback: job.link.id.clone().unwrap_or_else(|| "video".to_owned()),
                     duration: resolved.info.duration,
-                    dest: self.settings.dest.clone(),
+                    dest,
                     cleanup: vec![fetch_dir, probe_dir],
                 })
             }
