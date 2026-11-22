@@ -1,0 +1,24 @@
+[package]
+name = "pastegrab"
+version = "0.1.0"
+description = "pastegrab's window: wires the adapters to the core and the view"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+pastegrab-app = { path = "../../crates/app" }
+pastegrab-deploy = { path = "../../crates/deploy" }
+pastegrab-domain = { path = "../../crates/domain" }
+pastegrab-ffmpeg = { path = "../../crates/ffmpeg" }
+pastegrab-http = { path = "../../crates/http" }
+pastegrab-os = { path = "../../crates/os" }
+pastegrab-win32 = { path = "../../crates/win32" }
+pastegrab-ytdlp = { path = "../../crates/ytdlp" }
+
+[build-dependencies]
+pastegrab-winres = { path = "../../crates/winres" }
+
+[lints]
+workspace = true
