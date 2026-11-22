@@ -43,6 +43,15 @@ impl Row {
     pub fn name(&self) -> &str {
         self.title.as_deref().unwrap_or(&self.url)
     }
+
+    /// Thousandths of the running step done, once the step knows its size.
+    #[must_use]
+    pub fn permille(&self) -> Option<u16> {
+        let (_, progress) = self.progress?;
+        let total = progress.total.filter(|&total| total > 0)?;
+        let share = progress.done.min(total).saturating_mul(1000) / total;
+        Some(u16::try_from(share).unwrap_or(1000))
+    }
 }
 
 /// What an update changed, so the view redraws only that.
@@ -158,11 +167,8 @@ impl Board {
                 continue;
             }
             active = true;
-            let Some((_, progress)) = row.progress else {
-                continue;
-            };
-            if let Some(total) = progress.total.filter(|&total| total > 0) {
-                sum += progress.done.min(total).saturating_mul(1000) / total;
+            if let Some(share) = row.permille() {
+                sum += u64::from(share);
                 known += 1;
             }
         }
@@ -308,5 +314,22 @@ mod tests {
         state(&mut board, 1, JobState::Done);
         state(&mut board, 2, JobState::Failed(FailureKind::Network));
         assert_eq!(board.activity(), Activity::Idle);
+    }
+
+    #[test]
+    fn a_row_knows_its_share_only_while_a_step_with_a_size_runs() {
+        let mut board = Board::default();
+        added(&mut board, 1);
+        state(&mut board, 1, JobState::Fetching);
+        assert_eq!(board.rows()[0].permille(), None);
+        let numbers = Progress {
+            done: 1,
+            total: Some(3),
+            ..Progress::default()
+        };
+        board.progress(JobId(1), Phase::Download, numbers);
+        assert_eq!(board.rows()[0].permille(), Some(333));
+        state(&mut board, 1, JobState::Fetched);
+        assert_eq!(board.rows()[0].permille(), None);
     }
 }
