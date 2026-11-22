@@ -8,12 +8,12 @@ mod win;
 #[cfg(unix)]
 pub(crate) use unix::{
     Contained, configure, harden_dll_search, mark_downloaded, move_no_replace, quiet_child_errors,
-    short_path,
+    replace_file, short_path,
 };
 #[cfg(windows)]
 pub(crate) use win::{
     Contained, configure, harden_dll_search, mark_downloaded, move_no_replace, quiet_child_errors,
-    short_path,
+    replace_file, short_path,
 };
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {

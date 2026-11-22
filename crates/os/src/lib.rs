@@ -14,6 +14,15 @@ pub fn short_path(path: &std::path::Path) -> std::path::PathBuf {
     sys::short_path(path)
 }
 
+/// Swaps `from` in for `to`, replacing it, and returns once the rename is on disk.
+///
+/// # Errors
+///
+/// Errors from the operating system.
+pub fn replace_file(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
+    sys::replace_file(from, to)
+}
+
 /// Loads DLLs from System32 only, so one planted next to a download never loads.
 ///
 /// # Errors

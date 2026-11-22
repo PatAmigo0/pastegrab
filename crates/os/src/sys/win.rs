@@ -12,7 +12,9 @@ use std::sync::{Arc, Mutex};
 
 use pastegrab_app::ports::Exit;
 use windows::Win32::Foundation::HANDLE;
-use windows::Win32::Storage::FileSystem::{GetShortPathNameW, MOVEFILE_WRITE_THROUGH, MoveFileExW};
+use windows::Win32::Storage::FileSystem::{
+    GetShortPathNameW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW,
+};
 use windows::Win32::System::Diagnostics::Debug::{
     GetErrorMode, SEM_FAILCRITICALERRORS, SetErrorMode, THREAD_ERROR_MODE,
 };
@@ -146,6 +148,19 @@ pub(crate) fn move_no_replace(from: &Path, to: &Path) -> io::Result<()> {
     let (from, to) = (HSTRING::from(from), HSTRING::from(to));
     // SAFETY: both strings are NUL-terminated and outlive the call.
     unsafe { MoveFileExW(&from, &to, MOVEFILE_WRITE_THROUGH) }.map_err(io::Error::from)
+}
+
+pub(crate) fn replace_file(from: &Path, to: &Path) -> io::Result<()> {
+    let (from, to) = (HSTRING::from(from), HSTRING::from(to));
+    // SAFETY: both strings are NUL-terminated and outlive the call.
+    unsafe {
+        MoveFileExW(
+            &from,
+            &to,
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    }
+    .map_err(io::Error::from)
 }
 
 pub(crate) fn short_path(path: &Path) -> PathBuf {

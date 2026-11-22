@@ -110,6 +110,15 @@ pub(crate) fn move_no_replace(from: &Path, to: &Path) -> io::Result<()> {
     }
 }
 
+/// A rename reaches the disk with its folder.
+pub(crate) fn replace_file(from: &Path, to: &Path) -> io::Result<()> {
+    fs::rename(from, to)?;
+    match to.parent() {
+        Some(dir) if !dir.as_os_str().is_empty() => fs::File::open(dir)?.sync_all(),
+        _ => Ok(()),
+    }
+}
+
 pub(crate) const fn mark_downloaded(_file: &Path) {}
 
 pub(crate) fn short_path(path: &Path) -> std::path::PathBuf {
