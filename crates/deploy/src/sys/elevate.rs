@@ -29,18 +29,20 @@ pub fn run_elevated(exe: &Path, args: &str) -> io::Result<u32> {
     };
     // SAFETY: `info` and the strings it points to outlive the call.
     unsafe { ShellExecuteExW(&raw mut info) }?;
-    if info.hProcess.is_invalid() {
+    // A copy, because the 32-bit struct is packed and its fields can't be borrowed.
+    let handle = info.hProcess;
+    if handle.is_invalid() {
         return Err(io::Error::other(
             "the installer started without a process handle",
         ));
     }
     // SAFETY: SEE_MASK_NOCLOSEPROCESS hands the process handle to us, closed once by `OwnedHandle`.
-    let process = unsafe { OwnedHandle::from_raw_handle(info.hProcess.0) };
+    let process = unsafe { OwnedHandle::from_raw_handle(handle.0) };
     let mut code = 0;
     // SAFETY: the handle stays open while `process` lives, and `code` is writable.
     unsafe {
-        WaitForSingleObject(info.hProcess, INFINITE);
-        GetExitCodeProcess(info.hProcess, &raw mut code)?;
+        WaitForSingleObject(handle, INFINITE);
+        GetExitCodeProcess(handle, &raw mut code)?;
     }
     drop(process);
     Ok(code)
