@@ -11,6 +11,7 @@ pub const RU: Strings = Strings {
     download: "Скачать",
     save_to: "Сохранять в:",
     change_folder: "Изменить",
+    clear: "Очистить список",
     columns: Columns {
         title: "Название",
         state: "Состояние",

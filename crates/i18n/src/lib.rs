@@ -20,6 +20,8 @@ pub struct Strings {
     pub save_to: &'static str,
     /// The button that picks another folder.
     pub change_folder: &'static str,
+    /// The button that drops finished, failed and cancelled jobs from the list.
+    pub clear: &'static str,
     /// The job list's columns.
     pub columns: Columns,
     /// The job list's right-click menu.
