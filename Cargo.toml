@@ -37,12 +37,16 @@ unwrap_used = "deny"
 [profile.release]
 codegen-units = 1
 lto = "fat"
-opt-level = 3
+opt-level = "s"
 # An overflow panics and fails its job instead of producing a wrong size or offset.
 overflow-checks = true
 # A worker panic fails one job instead of every download.
 panic = "unwind"
 strip = true
+
+# Setup and updates decompress zstd archives, where loop unrolling pays off.
+[profile.release.package.ruzstd]
+opt-level = 3
 
 # The launcher starts before everything else, so it trades speed for size.
 [profile.size]
