@@ -22,8 +22,8 @@ use pastegrab_domain::link::{Link, LinkKind};
 use pastegrab_domain::media::{
     AudioCodec, AudioStream, Format, MediaInfo, Protocol, VideoCodec, VideoStream,
 };
-use ureq::Agent;
 use ureq::http::Response;
+use ureq::{Agent, ResponseExt};
 
 use magic::{Media, SNIFF_LEN};
 
@@ -57,6 +57,7 @@ impl Default for Direct {
             .timeout_connect(Some(Duration::from_secs(20)))
             .timeout_recv_response(Some(Duration::from_secs(30)))
             .timeout_per_read(Some(Duration::from_secs(30)))
+            .max_idle_connections_per_host(CONNECTIONS)
             .user_agent(concat!("pastegrab/", env!("CARGO_PKG_VERSION")))
             .build()
             .into();
@@ -125,6 +126,7 @@ impl Fetcher for Direct {
             .map_err(request_failure)?;
         let total = full_size(&response);
         let partial = response.status().as_u16() == 206;
+        let resolved_url = response.get_uri().to_string();
         let mut body = response.body_mut().as_reader();
 
         let mut head = [0; SNIFF_LEN];
@@ -133,12 +135,12 @@ impl Fetcher for Direct {
         if let Some(total) = total.filter(|&total| partial && total >= self.split_from) {
             let split = split::Split {
                 agent: &self.agent,
-                url,
+                url: &resolved_url,
                 file: &part,
                 total,
+                connections: self.connections,
             };
-            let ranges = split::ranges(total, self.connections);
-            split.download(body, &head[..read], &ranges, progress, cancel)?;
+            split.download(body, &head[..read], progress, cancel)?;
             return finish(work, &name, &part);
         }
         let mut file = File::create(&part).map_err(|e| io_failure(&e, "creating the file"))?;

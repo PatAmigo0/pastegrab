@@ -168,3 +168,26 @@ fn a_server_that_ignores_ranges_serves_the_file_over_one_connection() {
     );
     assert_eq!(connections.load(std::sync::atomic::Ordering::SeqCst), 1);
 }
+
+#[test]
+fn a_multi_chunk_split_steals_chunks_and_reassembles_every_byte_exact() {
+    let mut body = b"\0\0\0\x18ftypmp42".to_vec();
+    body.resize(12 * 1024 * 1024 + 137, 0);
+    for (i, byte) in body.iter_mut().enumerate().skip(12) {
+        *byte = u8::try_from((i * 31 + 7) & 0xFF).unwrap_or(0);
+    }
+    let (base, connections) = serve_counted(body.clone(), 200, 32, true);
+    let dir = TempDir::new("http-steal").expect("a temp folder");
+    let direct = Direct::default().split_above(4, 1_000_000);
+    let (file, last) = fetch_with(&direct, &format!("{base}/clip.mp4"), dir.path());
+    assert_eq!(
+        std::fs::read(file.expect("a file")).expect("the file"),
+        body
+    );
+    assert!(connections.load(std::sync::atomic::Ordering::SeqCst) >= 4);
+    let last = last.0.lock().expect("reports").expect("a report");
+    assert_eq!(
+        (last.done, last.total),
+        (body.len() as u64, Some(body.len() as u64))
+    );
+}
