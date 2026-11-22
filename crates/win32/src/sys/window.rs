@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use pastegrab_app::board::{Board, Change, Row};
+use pastegrab_app::ports::ViewUpdate;
 use pastegrab_app::queue::{Input, Paste};
 use pastegrab_app::runtime::Handle;
 use pastegrab_domain::link::analyze;
@@ -53,19 +54,15 @@ use windows::Win32::UI::WindowsAndMessaging::{
     MF_GRAYED, MF_SEPARATOR, MF_STRING, PostMessageW, TPM_RETURNCMD, TPM_RIGHTBUTTON,
     TrackPopupMenu, WA_INACTIVE, WM_ACTIVATE, WM_APP, WM_CONTEXTMENU, WM_COPYDATA, WM_KEYDOWN,
 };
-use windows::Win32::UI::WindowsAndMessaging::{
-    HICON, IMAGE_ICON, LR_DEFAULTCOLOR, LoadIconW, LoadImageW, SM_CXSMICON, SM_CYSMICON,
-};
 
 use super::bridge::{WM_CORE, WinView};
 use super::instance::FORWARD;
 use super::shell;
 use super::taskbar::Taskbar;
+use super::tray::{Tray, WM_TRAY};
 
 /// The window class, which a second start looks for.
 pub(super) const CLASS: PCWSTR = w!("pastegrab");
-/// The exe icon's resource id, which `winres` gives it.
-const ICON: PCWSTR = PCWSTR(std::ptr::without_provenance(1));
 /// Ctrl+V outside the link box: paste the clipboard as a new link.
 const WM_PASTE_ANYWHERE: u32 = WM_APP + 2;
 const MENU_OPEN: i32 = 1;
@@ -121,9 +118,8 @@ pub fn run(core: Handle, view: Arc<WinView>, startup: Startup) -> Result<(), Str
         hCursor: unsafe { LoadCursorW(None, IDC_ARROW) }.unwrap_or_default(),
         // SAFETY: as above.
         hbrBackground: unsafe { GetSysColorBrush(COLOR_BTNFACE) },
-        // SAFETY: icons from this exe's resources, which live as long as the process.
-        hIcon: unsafe { LoadIconW(Some(instance), ICON) }.unwrap_or_default(),
-        hIconSm: small_icon(instance),
+        hIcon: shell::icon(),
+        hIconSm: shell::small_icon(),
         lpszClassName: class,
         ..Default::default()
     };
@@ -248,6 +244,7 @@ struct Ui {
     link_len: Cell<usize>,
     clipboard: RefCell<String>,
     taskbar: Taskbar,
+    tray: Tray,
 }
 
 impl Ui {
@@ -266,6 +263,7 @@ impl Ui {
             link_len: Cell::new(0),
             clipboard: RefCell::default(),
             taskbar: Taskbar::new(),
+            tray: Tray::new(),
         }
     }
 
@@ -288,8 +286,10 @@ impl Ui {
             }
             WM_CORE => self.drain(hwnd),
             created if created == self.taskbar.created() => self.taskbar.attach(hwnd),
+            WM_TRAY => self.tray.message(hwnd, lparam),
             WM_ACTIVATE => {
                 if u32::try_from(low(wparam.0)).unwrap_or(0) != WA_INACTIVE {
+                    self.tray.remove(hwnd);
                     self.pick_up(hwnd, false);
                 }
                 return None;
@@ -312,6 +312,7 @@ impl Ui {
                 return Some(LRESULT(1));
             }
             WM_DESTROY => {
+                self.tray.remove(hwnd);
                 // SAFETY: ends this thread's message loop.
                 unsafe { PostQuitMessage(0) };
             }
@@ -630,14 +631,20 @@ impl Ui {
         let mut added = false;
         let mut card = false;
         let mut rows = Vec::new();
-        let count = {
+        let mut ended = None;
+        let (count, notice) = {
             let mut board = self.board.borrow_mut();
             for update in updates {
+                let ends = matches!(
+                    update,
+                    ViewUpdate::Finished { .. } | ViewUpdate::Failed { .. }
+                );
                 match board.apply(update) {
                     Change::Added => added = true,
                     Change::Row(index) => {
                         rows.push(index);
                         card = true;
+                        ended = ends.then_some(index).or(ended);
                     }
                     Change::NoLinks => {
                         self.notice.set(RU.no_links);
@@ -651,8 +658,14 @@ impl Ui {
                     rows.push(index);
                 }
             }
-            board.rows().len()
+            let notice = ended
+                .and_then(|index| board.rows().get(index))
+                .and_then(|row| text::notice(row, &RU));
+            (board.rows().len(), notice)
         };
+        if let Some(notice) = notice {
+            self.tray.announce(hwnd, &notice);
+        }
         let list = self.controls().list;
         if added {
             set_item_count(list, count);
@@ -828,22 +841,6 @@ fn fonts(dpi: i32) -> Fonts {
             normal: CreateFontIndirectW(&raw const face),
             bold: CreateFontIndirectW(&raw const heavy),
         }
-    }
-}
-
-fn small_icon(instance: HINSTANCE) -> HICON {
-    // SAFETY: plain queries and an icon from this exe's resources, shared and never freed.
-    unsafe {
-        let (width, height) = (GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON));
-        LoadImageW(
-            Some(instance),
-            ICON,
-            IMAGE_ICON,
-            width,
-            height,
-            LR_DEFAULTCOLOR,
-        )
-        .map_or_default(|handle| HICON(handle.0))
     }
 }
 

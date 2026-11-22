@@ -78,6 +78,31 @@ pub(crate) fn card_title(waiting: &[&Row], s: &Strings) -> String {
     }
 }
 
+/// What the tray says about a job that ended.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Notice {
+    pub(crate) title: &'static str,
+    pub(crate) body: String,
+    pub(crate) failed: bool,
+}
+
+/// The tray notice for a job whose file is in place or that failed for good; a failure the
+/// queue retries never reaches the row.
+pub(crate) fn notice(row: &Row, s: &Strings) -> Option<Notice> {
+    if let Some(stop) = &row.failure {
+        return Some(Notice {
+            title: s.notices.failed,
+            body: format!("{}\n{}", row.name(), failure(stop.kind, s)),
+            failed: true,
+        });
+    }
+    row.file.as_ref().map(|_| Notice {
+        title: s.notices.done,
+        body: row.name().to_owned(),
+        failed: false,
+    })
+}
+
 pub(crate) const fn failure(kind: FailureKind, s: &Strings) -> &'static str {
     let f = &s.failures;
     match kind {
@@ -113,6 +138,9 @@ fn host(url: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
+    use pastegrab_app::Failure;
     use pastegrab_app::board::Row;
     use pastegrab_app::ports::{Phase, Progress};
     use pastegrab_domain::job::{FailureKind, JobId, JobState};
@@ -121,7 +149,7 @@ mod tests {
     use pastegrab_domain::profile::ProfileKind;
     use pastegrab_i18n::RU;
 
-    use super::{card_detail, card_title, state};
+    use super::{card_detail, card_title, notice, state};
 
     fn row(state: JobState) -> Row {
         Row {
@@ -184,6 +212,26 @@ mod tests {
         assert_eq!(
             card_title(&[&ready, &other, &other], &RU),
             "Забег на 100 метров, и ещё 2"
+        );
+    }
+
+    #[test]
+    fn a_placed_file_or_a_final_failure_makes_a_notice_and_a_running_job_none() {
+        let mut finished = row(JobState::Done);
+        finished.file = Some(PathBuf::from("C:\\Videos\\Забег.mp4"));
+        let done = notice(&finished, &RU).expect("a notice");
+        assert_eq!(done.title, "Видео скачано");
+        assert_eq!(done.body, "Забег на 100 метров");
+        assert!(!done.failed);
+        let mut stopped = row(JobState::Failed(FailureKind::Network));
+        stopped.failure = Some(Failure::new(FailureKind::Network, "connection reset"));
+        let failed = notice(&stopped, &RU).expect("a notice");
+        assert_eq!(failed.title, "Видео не скачалось");
+        assert_eq!(failed.body, "Забег на 100 метров\nНет связи с интернетом");
+        assert!(failed.failed);
+        assert_eq!(
+            notice(&row(JobState::Failed(FailureKind::Network)), &RU),
+            None
         );
     }
 }

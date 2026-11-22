@@ -6,6 +6,7 @@ mod bridge;
 mod instance;
 mod shell;
 mod taskbar;
+mod tray;
 mod window;
 
 pub use bridge::WinView;

@@ -1,11 +1,13 @@
 use std::path::{Path, PathBuf};
 
 use pastegrab_i18n::RU;
+use windows::Win32::Foundation::HINSTANCE;
 use windows::Win32::Foundation::{HGLOBAL, HWND};
 use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance, CoTaskMemFree};
 use windows::Win32::System::DataExchange::{
     CloseClipboard, GetClipboardData, IsClipboardFormatAvailable, OpenClipboard,
 };
+use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Memory::{GlobalLock, GlobalUnlock};
 use windows::Win32::System::Ole::CF_UNICODETEXT;
 use windows::Win32::UI::Shell::{
@@ -17,7 +19,43 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GetSystemMetrics, IDYES, MB_ICONERROR, MB_ICONINFORMATION, MB_ICONQUESTION, MB_OK, MB_YESNO,
     MESSAGEBOX_STYLE, MessageBoxW, SM_CYSCREEN, SW_SHOWNORMAL,
 };
+use windows::Win32::UI::WindowsAndMessaging::{
+    HICON, IMAGE_ICON, LR_SHARED, LoadImageW, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON,
+    SYSTEM_METRICS_INDEX,
+};
 use windows::core::{HSTRING, PCWSTR, PWSTR, w};
+
+/// The exe icon's resource id, which `winres` gives it.
+const ICON: PCWSTR = PCWSTR(std::ptr::without_provenance(1));
+
+/// The exe icon at the system's icon size.
+pub(super) fn icon() -> HICON {
+    load_icon(SM_CXICON, SM_CYICON)
+}
+
+/// The exe icon at the size of title bars and the tray.
+pub(super) fn small_icon() -> HICON {
+    load_icon(SM_CXSMICON, SM_CYSMICON)
+}
+
+fn load_icon(width: SYSTEM_METRICS_INDEX, height: SYSTEM_METRICS_INDEX) -> HICON {
+    // SAFETY: plain queries, and an icon the system shares and frees with the process.
+    unsafe {
+        let Ok(module) = GetModuleHandleW(None) else {
+            return HICON::default();
+        };
+        let (width, height) = (GetSystemMetrics(width), GetSystemMetrics(height));
+        LoadImageW(
+            Some(HINSTANCE(module.0)),
+            ICON,
+            IMAGE_ICON,
+            width,
+            height,
+            LR_SHARED,
+        )
+        .map_or_default(|handle| HICON(handle.0))
+    }
+}
 
 /// The person's Videos folder.
 #[must_use]
