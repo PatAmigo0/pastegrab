@@ -487,6 +487,7 @@ dependencies = [
  "pastegrab-ffmpeg",
  "pastegrab-http",
  "pastegrab-os",
+ "pastegrab-store",
  "pastegrab-win32",
  "pastegrab-winres",
  "pastegrab-ytdlp",
@@ -575,6 +576,18 @@ dependencies = [
  "ruzstd",
  "tar",
  "windows",
+]
+
+[[package]]
+name = "pastegrab-store"
+version = "0.1.0"
+dependencies = [
+ "pastegrab-app",
+ "pastegrab-domain",
+ "pastegrab-os",
+ "pastegrab-testkit",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
