@@ -54,9 +54,11 @@ use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, DestroyMenu, GetCursorPos, GetDlgCtrlID, HMENU as MENU,
     MF_GRAYED, MF_SEPARATOR, MF_STRING, PostMessageW, TPM_RETURNCMD, TPM_RIGHTBUTTON,
     TrackPopupMenu, WA_INACTIVE, WM_ACTIVATE, WM_APP, WM_CONTEXTMENU, WM_COPYDATA, WM_KEYDOWN,
+    WM_TIMER,
 };
 
 use super::bridge::{WM_CORE, WinView};
+use super::fade::{self, Fade};
 use super::instance::FORWARD;
 use super::rows;
 use super::shell;
@@ -247,6 +249,7 @@ struct Ui {
     clipboard: RefCell<String>,
     taskbar: Taskbar,
     tray: Tray,
+    fade: Fade,
 }
 
 impl Ui {
@@ -266,6 +269,7 @@ impl Ui {
             clipboard: RefCell::default(),
             taskbar: Taskbar::new(),
             tray: Tray::new(),
+            fade: Fade::default(),
         }
     }
 
@@ -289,6 +293,7 @@ impl Ui {
             WM_CORE => self.drain(hwnd),
             created if created == self.taskbar.created() => self.taskbar.attach(hwnd),
             WM_TRAY => self.tray.message(hwnd, lparam),
+            WM_TIMER if wparam.0 == fade::TIMER => self.fade.tick(hwnd),
             WM_ACTIVATE => {
                 if u32::try_from(low(wparam.0)).unwrap_or(0) != WA_INACTIVE {
                     self.tray.remove(hwnd);
@@ -429,7 +434,7 @@ impl Ui {
         }
         let _ = self.controls.set(controls);
         self.show_folder();
-        self.refresh_card();
+        self.refresh_card(hwnd);
         self.view.attach(hwnd);
         let startup = self.startup.borrow_mut().take();
         if let Some(text) = startup {
@@ -685,14 +690,14 @@ impl Ui {
             redraw_item(list, index);
         }
         if card || added {
-            self.refresh_card();
+            self.refresh_card(hwnd);
             self.layout(hwnd);
         }
         let activity = self.board.borrow().activity();
         self.taskbar.show(hwnd, activity);
     }
 
-    fn refresh_card(&self) {
+    fn refresh_card(&self, hwnd: HWND) {
         let c = self.controls();
         let (state, title, detail, profile, can_download) = {
             let board = self.board.borrow();
@@ -718,11 +723,20 @@ impl Ui {
                 None => (Card::Hidden, String::new(), String::new(), 0, false),
             }
         };
-        self.card.set(state);
+        let before = self.card.replace(state);
         set_text(c.title, &title);
         set_text(c.detail, &detail);
         combo_select(c.profile, profile);
         enable(c.download, can_download);
+        if before == Card::Hidden {
+            match state {
+                Card::Shown => self
+                    .fade
+                    .show(hwnd, &[c.title, c.detail, c.profile, c.download]),
+                Card::Notice => self.fade.show(hwnd, &[c.title]),
+                Card::Hidden => {}
+            }
+        }
         show(c.title, state != Card::Hidden);
         for control in [c.detail, c.profile, c.download] {
             show(control, state == Card::Shown);

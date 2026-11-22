@@ -3,6 +3,7 @@
 #![allow(unsafe_code)]
 
 mod bridge;
+mod fade;
 mod instance;
 mod rows;
 mod shell;
