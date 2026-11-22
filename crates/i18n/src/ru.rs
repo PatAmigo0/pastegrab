@@ -1,4 +1,4 @@
-use crate::{Columns, Failures, NoPlan, States, Strings};
+use crate::{Columns, Failures, NoPlan, Setup, States, Strings};
 
 const KB: u64 = 1000;
 const MB: u64 = 1000 * KB;
@@ -66,6 +66,22 @@ pub const RU: Strings = Strings {
     size,
     speed,
     duration,
+    setup: Setup {
+        title: "Установка pastegrab",
+        ask: "Установить pastegrab?",
+        where_to: |size, folder| format!("Программа займёт {size} в папке\n{folder}"),
+        install: "Установить",
+        installing: "Устанавливаю pastegrab",
+        unpacking: "Распаковываю файлы программы",
+        done: "pastegrab установлен",
+        done_where: |folder| format!("Программа в папке\n{folder}"),
+        failed: "Не удалось установить pastegrab",
+        failed_advice: "Если pastegrab открыт, закройте его и запустите установку снова.",
+        needs_64_bit: "pastegrab работает только на 64-разрядной Windows 8 или новее, \
+                       а эта Windows 32-разрядная.",
+        needs_windows_8: "pastegrab работает на Windows 8 или новее.",
+        empty: "В этой сборке установщика нет файлов программы.",
+    },
 };
 
 fn size(bytes: u64) -> String {

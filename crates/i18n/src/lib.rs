@@ -40,6 +40,39 @@ pub struct Strings {
     pub speed: fn(u64) -> String,
     /// "2:41:04" from seconds.
     pub duration: fn(u32) -> String,
+    /// The installer.
+    pub setup: Setup,
+}
+
+/// The installer's text.
+#[derive(Debug)]
+pub struct Setup {
+    /// The window title.
+    pub title: &'static str,
+    /// The question on the first page.
+    pub ask: &'static str,
+    /// The size and folder under the question, from "about 248 MB" and the folder.
+    pub where_to: fn(&str, &str) -> String,
+    /// The button that starts the install.
+    pub install: &'static str,
+    /// The heading while files unpack.
+    pub installing: &'static str,
+    /// The line under it.
+    pub unpacking: &'static str,
+    /// The heading when it worked.
+    pub done: &'static str,
+    /// The folder line under it.
+    pub done_where: fn(&str) -> String,
+    /// The heading when it failed.
+    pub failed: &'static str,
+    /// The advice under the error.
+    pub failed_advice: &'static str,
+    /// A 32-bit Windows.
+    pub needs_64_bit: &'static str,
+    /// Windows 7 or older.
+    pub needs_windows_8: &'static str,
+    /// A build of the installer without the program's files.
+    pub empty: &'static str,
 }
 
 /// The job list's columns.
