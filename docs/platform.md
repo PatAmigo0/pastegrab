@@ -53,6 +53,10 @@ The probe's layered child failed on 8.0 until its manifest listed Windows 8 unde
 
 The killed job left its `.pastegrab-1` folder in the destination. 8.0 hasn't run it yet.
 
+## Defender
+
+**Defender on 8.1 still gets current definitions, and 8.0's never moves past its install media.** On 2026-11-22 the 8.1 VM updated through Windows Update to engine 1.1.26100.4 and definitions 1.463.414.0. The 8.0 VM stayed at engine 1.1.8502.0 and definitions 1.129.21.0 and reported that no updates were needed. Neither flagged `pgcli.exe`, `qjs.exe` or the packed Python.
+
 ## YouTube's JS check
 
 **QuickJS 2026-06-04 solves YouTube's challenge in about 4.3 s on these VMs, QuickJS-NG in about 5.2 s.** The 8.0 runs shared the host with the 8.1 VM and took up to 5.7 and 7.8 s. yt-dlp kept nothing between runs, and a second probe of the same video paid the full time again. pastegrab ships Bellard's QuickJS and keeps the probe's info JSON for the fetch, which solves the challenge once per video.

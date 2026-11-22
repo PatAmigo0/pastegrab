@@ -512,6 +512,7 @@ The installer settles the machine check, the tuned defaults, the prerequisites, 
 - The corpus starts with the one olympics.com link you have and the `_TESTS` URLs that yt-dlp keeps in each extractor for olympics.com, YouTube, archive.org, VK, OK.ru, Rutube, Dailymotion and smotrim. Links from his reports join it as they arrive.
 - Before each release the lab VM checklist runs: install with `pastegrab-setup.exe`, read its report, paste the corpus, kill pastegrab mid-download and confirm Task Manager shows no orphans, pull the network, fill the disk, check a Russian locale with an emoji title.
 - A new Python, yt-dlp, QuickJS or ffmpeg version goes through `lab/m0` on both VMs before it ships, and a new Rust toolchain date goes through `lab/probe`.
+- Every release file goes through Defender in both VMs and through VirusTotal, as `docs/release.md` lays out.
 
 ### Lab VM
 
