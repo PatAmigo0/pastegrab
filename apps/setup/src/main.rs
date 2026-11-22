@@ -1,5 +1,6 @@
-//! `pastegrab-setup.exe`: checks for 64-bit Windows 8 or newer, then unpacks the program and
-//! every tool it runs into the person's own folder. Nothing downloads during the install.
+//! `pastegrab-setup.exe`: checks for 64-bit Windows 8 or newer, unpacks the program and every
+//! tool it runs into the person's own folder, and adds its shortcuts and uninstall entry.
+//! Nothing downloads during the install.
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
 

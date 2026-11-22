@@ -12,6 +12,7 @@ ruzstd = { version = "0.9.1", default-features = false, features = ["hash", "std
 tar = { version = "0.4", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
+pastegrab-deploy = { path = "../../crates/deploy" }
 pastegrab-i18n = { path = "../../crates/i18n" }
 windows = { version = "0.62.2", features = [
     "Wdk_System_SystemServices",

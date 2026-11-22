@@ -1,15 +1,17 @@
 //! The installer's three pages in one Windows task dialog: the question, the progress bar while
-//! files unpack, and the outcome.
+//! files unpack, and the outcome, which can start the program.
 
 #![allow(unsafe_code)]
 
 use std::cell::{Cell, RefCell};
-use std::env;
-use std::path::PathBuf;
+use std::io;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 
+use pastegrab_deploy::Entry;
 use pastegrab_i18n::RU;
 use windows::Wdk::System::SystemServices::RtlGetVersion;
 use windows::Win32::Foundation::{HWND, LPARAM, S_FALSE, S_OK, WPARAM};
@@ -30,6 +32,7 @@ use windows::core::{BOOL, HRESULT, HSTRING, PCWSTR};
 use crate::install::install;
 
 const INSTALL: i32 = 100;
+const OPEN: i32 = 101;
 const STEPS: usize = 1000;
 
 /// Checks the PC, then asks, unpacks and reports.
@@ -44,14 +47,13 @@ pub fn run(payload: &'static [u8], unpacked: u64) {
     if payload.is_empty() {
         return message(text.empty);
     }
-    let Some(dest) = env::var_os("LOCALAPPDATA")
-        .map(|dir| PathBuf::from(dir).join("Programs").join("pastegrab"))
-    else {
+    let Some(dest) = pastegrab_deploy::install_folder() else {
         return message(text.failed);
     };
     let folder = dest.display().to_string();
     let dialog = Dialog {
         payload,
+        unpacked,
         dest,
         shared: Arc::default(),
         page: Cell::new(Page::Ask),
@@ -63,6 +65,7 @@ pub fn run(payload: &'static [u8], unpacked: u64) {
         unpacking: text.unpacking.into(),
         done: text.done.into(),
         done_where: (text.done_where)(&folder).into(),
+        open: text.open.into(),
         failed: text.failed.into(),
         failure: RefCell::default(),
     };
@@ -85,6 +88,7 @@ struct Shared {
 /// Lives on the stack of `show` for as long as the dialog does; the pages point into it.
 struct Dialog {
     payload: &'static [u8],
+    unpacked: u64,
     dest: PathBuf,
     shared: Arc<Shared>,
     page: Cell<Page>,
@@ -96,13 +100,14 @@ struct Dialog {
     unpacking: HSTRING,
     done: HSTRING,
     done_where: HSTRING,
+    open: HSTRING,
     failed: HSTRING,
     failure: RefCell<HSTRING>,
 }
 
 impl Dialog {
     fn show(&self) {
-        let button = [self.button()];
+        let button = [button(INSTALL, &self.install)];
         let config = self.page(
             &self.ask,
             &self.where_to,
@@ -113,13 +118,6 @@ impl Dialog {
         // SAFETY: `config` and everything it points to live in `self` or on this stack frame
         // until the dialog returns.
         let _ = unsafe { TaskDialogIndirect(&raw const config, None, None, None) };
-    }
-
-    fn button(&self) -> TASKDIALOG_BUTTON {
-        TASKDIALOG_BUTTON {
-            nButtonID: INSTALL,
-            pszButtonText: PCWSTR(self.install.as_ptr()),
-        }
     }
 
     fn page(
@@ -146,7 +144,7 @@ impl Dialog {
             pszContent: PCWSTR(content.as_ptr()),
             cButtons: u32::try_from(buttons.len()).unwrap_or(0),
             pButtons: buttons.as_ptr(),
-            nDefaultButton: INSTALL,
+            nDefaultButton: buttons.first().map_or(0, |b| b.nButtonID),
             pfCallback: Some(callback),
             lpCallbackData: std::ptr::from_ref(self) as isize,
             ..Default::default()
@@ -156,6 +154,7 @@ impl Dialog {
     fn navigate(&self, hwnd: HWND, page: Page) {
         self.page.set(page);
         let failure = self.failure.borrow().clone();
+        let open = [button(OPEN, &self.open)];
         let config = match page {
             Page::Ask => return,
             Page::Progress => self.page(
@@ -165,9 +164,13 @@ impl Dialog {
                 TDCBF_CANCEL_BUTTON,
                 false,
             ),
-            Page::Outcome if failure.is_empty() => {
-                self.page(&self.done, &self.done_where, &[], TDCBF_CLOSE_BUTTON, true)
-            }
+            Page::Outcome if failure.is_empty() => self.page(
+                &self.done,
+                &self.done_where,
+                &open,
+                TDCBF_CLOSE_BUTTON,
+                true,
+            ),
             Page::Outcome => self.page(&self.failed, &failure, &[], TDCBF_CLOSE_BUTTON, true),
         };
         // SAFETY: the dialog reads `config` during the call; its strings live in `self`.
@@ -199,8 +202,11 @@ impl Dialog {
             );
         }
         let (payload, dest, shared) = (self.payload, self.dest.clone(), Arc::clone(&self.shared));
+        let size_kib = u32::try_from(self.unpacked / 1024).unwrap_or(u32::MAX);
         thread::spawn(move || {
-            let result = install(payload, &dest, &shared.read).map_err(|e| e.to_string());
+            let result = install(payload, &dest, &shared.read)
+                .and_then(|()| register(&dest, size_kib))
+                .map_err(|e| e.to_string());
             *shared
                 .outcome
                 .lock()
@@ -235,6 +241,33 @@ impl Dialog {
             self.navigate(hwnd, Page::Outcome);
         }
     }
+
+    fn launch(&self) {
+        let app = program(&self.dest);
+        let dir = app.parent().unwrap_or(&self.dest);
+        let _ = Command::new(&app).current_dir(dir).spawn();
+    }
+}
+
+fn program(dest: &Path) -> PathBuf {
+    dest.join("app").join("pastegrab.exe")
+}
+
+fn register(dest: &Path, size_kib: u32) -> io::Result<()> {
+    pastegrab_deploy::register(&Entry {
+        exe: &program(dest),
+        folder: dest,
+        version: env!("CARGO_PKG_VERSION"),
+        size_kib,
+        description: RU.setup.shortcut,
+    })
+}
+
+fn button(id: i32, text: &HSTRING) -> TASKDIALOG_BUTTON {
+    TASKDIALOG_BUTTON {
+        nButtonID: id,
+        pszButtonText: PCWSTR(text.as_ptr()),
+    }
 }
 
 const fn message_id(message: i32) -> u32 {
@@ -257,6 +290,10 @@ unsafe extern "system" fn callback(
             S_FALSE
         }
         (TDN_BUTTON_CLICKED, Page::Progress) => S_FALSE,
+        (TDN_BUTTON_CLICKED, Page::Outcome) if wparam.0 == usize::try_from(OPEN).unwrap_or(0) => {
+            dialog.launch();
+            S_OK
+        }
         (TDN_NAVIGATED, Page::Progress) => {
             dialog.start(hwnd);
             S_OK
