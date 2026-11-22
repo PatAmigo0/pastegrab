@@ -1,5 +1,13 @@
 //! Fakes for every port. Each records what it was asked and answers from a script, so tests of
-//! the queue, the steps and the views run without processes, files or a network.
+//! the queue, the steps and the views run without processes, files or a network. `contract`
+//! holds the rules every implementation of a port keeps, fakes and adapters alike.
+
+pub mod contract;
+mod scripted;
+mod temp;
+
+pub use scripted::{ScriptedRunner, Transcript};
+pub use temp::TempDir;
 
 use std::collections::{BTreeSet, VecDeque};
 use std::io;
