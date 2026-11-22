@@ -57,6 +57,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use super::bridge::{WM_CORE, WinView};
 use super::instance::FORWARD;
 use super::shell;
+use super::taskbar::Taskbar;
 
 /// The window class, which a second start looks for.
 pub(super) const CLASS: PCWSTR = w!("pastegrab");
@@ -238,6 +239,7 @@ struct Ui {
     notice: Cell<&'static str>,
     link_len: Cell<usize>,
     clipboard: RefCell<String>,
+    taskbar: Taskbar,
 }
 
 impl Ui {
@@ -255,6 +257,7 @@ impl Ui {
             notice: Cell::new(""),
             link_len: Cell::new(0),
             clipboard: RefCell::default(),
+            taskbar: Taskbar::new(),
         }
     }
 
@@ -276,6 +279,7 @@ impl Ui {
                 return Some(LRESULT(packed.cast_signed()));
             }
             WM_CORE => self.drain(hwnd),
+            created if created == self.taskbar.created() => self.taskbar.attach(hwnd),
             WM_ACTIVATE => {
                 if u32::try_from(low(wparam.0)).unwrap_or(0) != WA_INACTIVE {
                     self.pick_up(hwnd, false);
@@ -655,6 +659,8 @@ impl Ui {
             self.refresh_card();
             self.layout(hwnd);
         }
+        let activity = self.board.borrow().activity();
+        self.taskbar.show(hwnd, activity);
     }
 
     fn refresh_card(&self) {
