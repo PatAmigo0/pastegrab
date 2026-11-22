@@ -324,6 +324,27 @@ fn without_audio_only_formats_a_muxed_one_keeps_the_sound() {
 }
 
 #[test]
+fn without_heights_the_bigger_video_wins() {
+    let no_height = |id: &str, mb: u64| Format {
+        video: Some(VideoStream {
+            codec: VideoCodec::Unknown,
+            height: None,
+            fps: None,
+        }),
+        ..video(id, "avc1", 1, 1, mb)
+    };
+    let info = source(vec![
+        no_height("html5-video-med", 1),
+        no_height("html5-video-high", 4),
+        audio("html5-audio-high", "mp3", 128, 1),
+    ]);
+    assert_eq!(
+        ids(&plan(&info, ProfileKind::Video, 768)),
+        ["html5-video-high", "html5-audio-high"]
+    );
+}
+
+#[test]
 fn a_silent_source_stays_a_silent_video() {
     let info = source(vec![video("v-480", "avc1.4d401e", 480, 25, 8)]);
     assert_eq!(ids(&plan(&info, ProfileKind::Video, 768)), ["v-480"]);

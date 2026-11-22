@@ -289,15 +289,22 @@ fn video_key(
     v: VideoStream,
     goal: VideoGoal,
     duration: Option<u32>,
-) -> (u32, u32, u32, u32, Reverse<u64>) {
-    let codec = u32::from(goal.codec.is_none_or(|c| c == v.codec));
-    let height = v.height.unwrap_or(0);
-    let fps = u32::from(v.fps.unwrap_or(0));
-    let ease = v.codec.decode_ease();
-    let size = Reverse(f.estimated_bytes(duration).unwrap_or(u64::MAX));
+) -> (u64, u64, u64, u64, u64, Reverse<u64>) {
+    let codec = u64::from(goal.codec.is_none_or(|c| c == v.codec));
+    let height = u64::from(v.height.unwrap_or(0));
+    let bytes = f.estimated_bytes(duration);
+    // Without a height, the bigger file is the better guess at quality.
+    let unsized_quality = if v.height.is_none() {
+        bytes.unwrap_or(0)
+    } else {
+        0
+    };
+    let fps = u64::from(v.fps.unwrap_or(0));
+    let ease = u64::from(v.codec.decode_ease());
+    let size = Reverse(bytes.unwrap_or(u64::MAX));
     match goal.rank {
-        Rank::Height => (codec, height, fps, ease, size),
-        Rank::FrameRate => (fps, codec, height, ease, size),
+        Rank::Height => (codec, height, unsized_quality, fps, ease, size),
+        Rank::FrameRate => (fps, codec, height, unsized_quality, ease, size),
     }
 }
 
