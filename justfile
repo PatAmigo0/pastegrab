@@ -42,3 +42,16 @@ icon:
         offset += len(png)
     open(sys.argv[2], "wb").write(out + b"".join(images))
     PY
+
+# Builds every Windows file of a release into target/dist/<version>/; TOOLS is the unpacked tools.
+package TOOLS:
+    tools/release/package.sh {{TOOLS}}
+
+# Signs a packaged release's update.json with the release key; minisign asks for its password.
+sign VERSION:
+    minisign -Sm target/dist/{{VERSION}}/update.json -s ~/.minisign/minisign.key
+
+# Publishes a signed release on GitHub, where every install's update check finds it; with
+# --prerelease only a PC told its address finds it.
+publish VERSION *FLAGS:
+    gh release create v{{VERSION}} target/dist/{{VERSION}}/* --title "pastegrab {{VERSION}}" --notes "" {{FLAGS}}
