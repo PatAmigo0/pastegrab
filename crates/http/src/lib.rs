@@ -1,8 +1,11 @@
 //! Direct media files over HTTP(S): a `Resolver` and a `Fetcher` on ureq with rustls and
 //! bundled roots. A file only lands once its first bytes match a media signature, whatever
-//! `Content-Type` claims.
+//! `Content-Type` claims. `Downloads` fetches release files for app updates.
 
+mod downloads;
 mod magic;
+
+pub use downloads::Downloads;
 
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
