@@ -90,6 +90,7 @@ pub fn run(sidecars: &Sidecars, preset: Preset) -> Vec<Check> {
             let result = match (probe, answer) {
                 (Probe::Encode, Ok(_)) => Ok(String::new()),
                 (Probe::QuickJs, Ok(out)) if out.trim() == "42" => Ok(String::new()),
+                (Probe::QuickJs, Ok(out)) => Err(format!("6 times 7 came out as {}", out.trim())),
                 (_, Ok(out)) => first_line_after(&out, prefix)
                     .ok_or_else(|| format!("an unexpected answer: {}", out.trim())),
                 (_, Err(e)) => Err(e),
