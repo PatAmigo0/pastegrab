@@ -4,7 +4,7 @@ members = ["apps/*", "crates/*"]
 
 [workspace.package]
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.100"
 license = "Apache-2.0"
 publish = false
 

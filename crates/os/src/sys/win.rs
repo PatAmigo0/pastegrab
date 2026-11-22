@@ -49,7 +49,7 @@ pub(crate) fn quiet_child_errors() {
 pub(crate) fn configure(command: &mut Command, low_priority: bool) {
     let mut flags = CREATE_SUSPENDED | CREATE_NO_WINDOW;
     if low_priority {
-        flags = flags | BELOW_NORMAL_PRIORITY_CLASS;
+        flags |= BELOW_NORMAL_PRIORITY_CLASS;
     }
     command.creation_flags(flags.0);
 }
