@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # build-setup.sh TOOLS_DIR LAUNCHER APP_FILE...: packs the launcher as pastegrab.exe, the app files
 # into app/<version>/ and the python, qjs and ffmpeg folders of TOOLS_DIR into one compressed tar,
-# then builds pastegrab-setup.exe around it.
+# then builds pastegrab-setup.exe around it and the VC++ redistributable.
 # needs: cargo tar zstd podman
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
@@ -25,7 +25,9 @@ size=$(stat -c %s "$out/payload.tar")
 # accepts that much and no more.
 nice -n 10 zstd -q -f -19 --long=27 -T2 "$out/payload.tar" -o "$out/payload.tar.zst"
 rm "$out/payload.tar"
+"$root/tools/release/fetch-redist.sh" >/dev/null
 PASTEGRAB_PAYLOAD=/src/target/payload/payload.tar.zst PASTEGRAB_PAYLOAD_SIZE=$size \
+    PASTEGRAB_REDIST=/src/target/redist/vc_redist.x64.exe \
     "$root/tools/build/rust/build.sh" "$root" i686-win7-windows-gnu -p pastegrab-setup
 setup=$root/target/win7/i686-win7-windows-gnu/release/pastegrab-setup.exe
 echo "$setup: $(stat -c %s "$setup") bytes, $size unpacked"

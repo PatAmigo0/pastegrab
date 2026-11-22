@@ -11,9 +11,9 @@ shift 2
 image=pastegrab-rust-build
 podman build -q -t "$image" "$here" >/dev/null
 # Named volumes keep the crate index and sources between runs.
-# The setup's payload comes in through these, when set.
+# The setup's payload and the redistributable it carries come in through these, when set.
 forward=()
-for name in PASTEGRAB_PAYLOAD PASTEGRAB_PAYLOAD_SIZE; do
+for name in PASTEGRAB_PAYLOAD PASTEGRAB_PAYLOAD_SIZE PASTEGRAB_REDIST; do
     if [ -n "${!name:-}" ]; then forward+=(-e "$name=${!name}"); fi
 done
 # A target folder of its own keeps host and container builds from rebuilding each other.
