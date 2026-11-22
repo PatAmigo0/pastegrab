@@ -1,4 +1,4 @@
-use crate::{Columns, Failures, NoPlan, Setup, States, Strings};
+use crate::{Columns, Failures, Menu, NoPlan, Setup, States, Strings};
 
 const KB: u64 = 1000;
 const MB: u64 = 1000 * KB;
@@ -14,6 +14,12 @@ pub const RU: Strings = Strings {
     columns: Columns {
         title: "Название",
         state: "Состояние",
+    },
+    menu: Menu {
+        open: "Открыть",
+        show_in_folder: "Показать в папке",
+        retry: "Повторить",
+        cancel: "Отменить",
     },
     no_links: "В тексте нет ссылки",
     profiles: [

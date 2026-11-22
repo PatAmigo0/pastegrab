@@ -22,6 +22,8 @@ pub struct Strings {
     pub change_folder: &'static str,
     /// The job list's columns.
     pub columns: Columns,
+    /// The job list's right-click menu.
+    pub menu: Menu,
     /// A paste without a link.
     pub no_links: &'static str,
     /// Profile names, in the format list's order.
@@ -86,6 +88,19 @@ pub struct Columns {
     pub title: &'static str,
     /// The state and progress.
     pub state: &'static str,
+}
+
+/// The job list's right-click menu.
+#[derive(Debug)]
+pub struct Menu {
+    /// Opens the finished file.
+    pub open: &'static str,
+    /// Shows the file in its folder.
+    pub show_in_folder: &'static str,
+    /// Starts a failed or cancelled job again.
+    pub retry: &'static str,
+    /// Stops a job.
+    pub cancel: &'static str,
 }
 
 /// A job's state as one word or two.
