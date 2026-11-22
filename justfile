@@ -16,13 +16,16 @@ clippy:
 test:
     cargo test --workspace
 
-# Lints the Windows-only code in the toolchain container.
+# Lints the Windows-only code in the toolchain container: everything for 64-bit, and the
+# 32-bit setup.
 clippy-windows:
     podman build -q -t pastegrab-rust-build tools/build/rust >/dev/null
     podman run --rm -v "$PWD:/src" -v pastegrab-cargo-registry:/opt/cargo/registry \
         -v pastegrab-cargo-git:/opt/cargo/git -e CARGO_TARGET_DIR=/src/target/win7 -w /src \
-        pastegrab-rust-build cargo clippy -q -Zbuild-std=std,panic_unwind \
-        --target x86_64-win7-windows-gnu --workspace --all-targets -- -D warnings
+        pastegrab-rust-build sh -c 'cargo clippy -q -Zbuild-std=std,panic_unwind \
+        --target x86_64-win7-windows-gnu --workspace --all-targets -- -D warnings && \
+        cargo clippy -q -Zbuild-std=std,panic_unwind --target i686-win7-windows-gnu \
+        -p pastegrab-setup --all-targets -- -D warnings'
 
 # Renders the exe icon from its SVG, each size a PNG inside the .ico; needs rsvg-convert.
 icon:
