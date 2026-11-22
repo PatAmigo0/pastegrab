@@ -13,6 +13,7 @@ pastegrab-deploy = { path = "../../crates/deploy" }
 pastegrab-domain = { path = "../../crates/domain" }
 pastegrab-ffmpeg = { path = "../../crates/ffmpeg" }
 pastegrab-http = { path = "../../crates/http" }
+pastegrab-i18n = { path = "../../crates/i18n" }
 pastegrab-os = { path = "../../crates/os" }
 pastegrab-store = { path = "../../crates/store" }
 pastegrab-win32 = { path = "../../crates/win32" }

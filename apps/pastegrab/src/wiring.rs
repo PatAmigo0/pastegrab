@@ -20,6 +20,12 @@ use pastegrab_ytdlp::{Engine, YtDlp};
 
 pub fn run() -> ExitCode {
     let _ = pastegrab_os::harden_dll_search();
+    if env::args_os()
+        .nth(1)
+        .is_some_and(|arg| arg == "--uninstall")
+    {
+        return crate::uninstall::run();
+    }
     match start() {
         Ok(()) => ExitCode::SUCCESS,
         Err(problem) => {
@@ -34,9 +40,7 @@ fn start() -> Result<(), String> {
     let Some(_instance) = pastegrab_win32::claim(&text) else {
         return Ok(());
     };
-    let data = env::var_os("LOCALAPPDATA")
-        .map(|dir| PathBuf::from(dir).join("pastegrab"))
-        .ok_or("LOCALAPPDATA is unset")?;
+    let data = pastegrab_deploy::data_folder().ok_or("LOCALAPPDATA is unset")?;
     let temp = data.join("tmp");
     fs::create_dir_all(&temp).map_err(|e| format!("{}: {e}", temp.display()))?;
     let temp = pastegrab_os::short_path(&temp);

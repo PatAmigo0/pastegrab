@@ -4,6 +4,8 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 #[cfg(windows)]
+mod uninstall;
+#[cfg(windows)]
 mod wiring;
 
 fn main() -> std::process::ExitCode {

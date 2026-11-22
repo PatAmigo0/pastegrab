@@ -486,6 +486,7 @@ dependencies = [
  "pastegrab-domain",
  "pastegrab-ffmpeg",
  "pastegrab-http",
+ "pastegrab-i18n",
  "pastegrab-os",
  "pastegrab-store",
  "pastegrab-win32",
@@ -512,6 +513,9 @@ dependencies = [
 [[package]]
 name = "pastegrab-deploy"
 version = "0.1.0"
+dependencies = [
+ "windows",
+]
 
 [[package]]
 name = "pastegrab-domain"
@@ -571,6 +575,7 @@ dependencies = [
 name = "pastegrab-setup"
 version = "0.1.0"
 dependencies = [
+ "pastegrab-deploy",
  "pastegrab-i18n",
  "pastegrab-winres",
  "ruzstd",
