@@ -46,6 +46,17 @@ PowerShell starts with the execution policy bypassed, which lets a script call `
 ./guest-put pastegrab-w81 m0.ps1 'C:\pastegrab-lab\m0\m0.ps1'
 ```
 
+The agent runs in session 0, where windows never show. `guest-gui` starts a program on the logged-on user's desktop through an interactive scheduled task, `screenshot` saves the screen as a PNG, and `virsh send-key` presses keys. `defender-scan` copies files in, updates Defender and scans them.
+
+```sh
+./guest-gui pastegrab-w81 'C:\pg\pastegrab-setup.exe'
+./screenshot pastegrab-w81 /tmp/setup.png
+virsh -c qemu:///system send-key pastegrab-w81 KEY_ENTER
+./defender-scan pastegrab-w81 ../target/win7/x86_64-win7-windows-gnu/release/pgcli.exe
+```
+
+The unattended install skipped the first-run screen that turns SmartScreen on, and the VMs show Windows' older publisher warning for downloaded files instead.
+
 Snapshots need the VM shut off. `clean` is Windows right after setup, and `ucrt` adds the UCRT that his PC has. The install ISOs were deleted after setup, with the install drive emptied in every snapshot, which means a rebuilt VM first needs its ISO back at the old path.
 
 ```sh
