@@ -20,6 +20,7 @@ use crate::steps::{self, Ports};
 enum Msg {
     Input(Input),
     Worker(JobId, u64, Outcome),
+    Close,
     Shutdown,
 }
 
@@ -29,7 +30,7 @@ struct HandleInner {
 
 impl Drop for HandleInner {
     fn drop(&mut self) {
-        let _ = self.tx.send(Msg::Shutdown);
+        let _ = self.tx.send(Msg::Close);
     }
 }
 
@@ -105,7 +106,8 @@ struct Runner {
 impl Runner {
     fn step(&mut self, msg: Msg) -> bool {
         let input = match msg {
-            Msg::Shutdown | Msg::Input(Input::Shutdown) => {
+            Msg::Close if self.until_idle => return self.done(),
+            Msg::Close | Msg::Shutdown | Msg::Input(Input::Shutdown) => {
                 if self.shutting_down {
                     return self.done();
                 }
