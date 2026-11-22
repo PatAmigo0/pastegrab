@@ -1,5 +1,3 @@
-//! Platform code, and the only place in this crate where `unsafe` is allowed.
-
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 #[cfg(unix)]

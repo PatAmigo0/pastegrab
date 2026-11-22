@@ -1,6 +1,5 @@
-//! Fakes for every port. Each records what it was asked and answers from a script, so tests of
-//! the queue, the steps and the views run without processes, files or a network. `contract`
-//! holds the rules every implementation of a port keeps, fakes and adapters alike.
+//! Fakes for every port, which record what they were asked and answer from a script, and
+//! `contract`, the rules every implementation of a port keeps.
 
 pub mod contract;
 mod scripted;

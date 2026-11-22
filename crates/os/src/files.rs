@@ -1,5 +1,3 @@
-//! Moving finished files into place on a local disk.
-
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -19,7 +17,7 @@ impl Files for LocalFiles {
     }
 
     fn place(&self, from: &Path, to: &Path) -> io::Result<()> {
-        // Marked before the move, the file never shows up under its final name unmarked.
+        // Marked first, the file never shows up under its final name unmarked.
         sys::mark_downloaded(from);
         sys::move_no_replace(from, to)
     }

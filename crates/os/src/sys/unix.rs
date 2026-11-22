@@ -1,5 +1,3 @@
-//! Process groups and no-replace moves on Linux and other Unix systems.
-
 #![allow(unsafe_code)]
 
 use std::fs;
@@ -21,7 +19,6 @@ pub(crate) const fn harden_dll_search() -> io::Result<()> {
 
 pub(crate) const fn quiet_child_errors() {}
 
-/// Puts the child in a process group of its own, which a cancel kills as a whole.
 pub(crate) fn configure(command: &mut Command, low_priority: bool) {
     command.process_group(0);
     #[cfg(target_os = "linux")]
@@ -42,7 +39,6 @@ pub(crate) fn configure(command: &mut Command, low_priority: bool) {
     let _ = low_priority;
 }
 
-/// A started child and its process group, which stays killable until the child is reaped.
 pub(crate) struct Contained {
     child: Child,
     group: Arc<Mutex<Option<Pid>>>,
@@ -59,7 +55,6 @@ impl Contained {
         Killer(Arc::clone(&self.group))
     }
 
-    /// Waits for the child, kills whatever it left running in its group, then reaps it.
     pub(crate) fn wait(mut self) -> io::Result<Exit> {
         let pid = Pid::from_child(&self.child);
         // An exited but unreaped child keeps its group id from being reused until disarm.
@@ -82,7 +77,6 @@ impl Drop for Contained {
     }
 }
 
-/// Kills a child's process group from another thread.
 #[derive(Clone)]
 pub(crate) struct Killer(Arc<Mutex<Option<Pid>>>);
 
@@ -105,7 +99,7 @@ pub(crate) fn move_no_replace(from: &Path, to: &Path) -> io::Result<()> {
     use io::ErrorKind::{AlreadyExists, NotFound};
     match fs::hard_link(from, to) {
         Ok(()) => {
-            // Should the old name stay, the work folder's removal takes it.
+            // A leftover old name goes with the work folder.
             let _ = fs::remove_file(from);
             Ok(())
         }

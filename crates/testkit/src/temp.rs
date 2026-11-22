@@ -1,5 +1,3 @@
-//! Temporary folders that remove themselves.
-
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{fs, io, process};

@@ -1,5 +1,3 @@
-//! Job objects, no-replace moves and the download mark on Windows.
-
 #![allow(unsafe_code)]
 
 use std::ffi::OsString;
@@ -37,8 +35,7 @@ pub(crate) fn harden_dll_search() -> io::Result<()> {
     unsafe { SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32) }.map_err(io::Error::from)
 }
 
-/// Children inherit the mode, and a missing DLL then ends one with an exit code instead of a
-/// dialog in front of the person.
+/// Children inherit this, and a missing DLL then fails with an exit code instead of a dialog.
 pub(crate) fn quiet_child_errors() {
     // SAFETY: flag arguments and no pointers.
     unsafe {
@@ -56,14 +53,12 @@ pub(crate) fn configure(command: &mut Command, low_priority: bool) {
     command.creation_flags(flags.0);
 }
 
-/// A started child inside a kill-on-close job of its own.
 pub(crate) struct Contained {
     child: Child,
     job: Arc<Mutex<Option<OwnedHandle>>>,
 }
 
 impl Contained {
-    /// Puts the suspended child in its job, then lets it run.
     pub(crate) fn new(mut child: Child) -> io::Result<Self> {
         match contain(&child) {
             Ok(job) => Ok(Self {
@@ -82,9 +77,9 @@ impl Contained {
         Killer(Arc::clone(&self.job))
     }
 
-    /// Waits for the child; closing its job then ends whatever it left running.
     pub(crate) fn wait(mut self) -> io::Result<Exit> {
         let status = self.child.wait()?;
+        // Closing the job ends whatever the child left running.
         drop(lock(&self.job).take());
         Ok(Exit {
             code: status.code(),
@@ -100,7 +95,6 @@ impl Drop for Contained {
     }
 }
 
-/// Ends every process in a child's job from another thread.
 #[derive(Clone)]
 pub(crate) struct Killer(Arc<Mutex<Option<OwnedHandle>>>);
 
@@ -153,7 +147,6 @@ pub(crate) fn move_no_replace(from: &Path, to: &Path) -> io::Result<()> {
     unsafe { MoveFileExW(&from, &to, MOVEFILE_WRITE_THROUGH) }.map_err(io::Error::from)
 }
 
-/// Adds the mark Windows puts on every download.
 pub(crate) fn mark_downloaded(file: &Path) {
     let mut stream = OsString::from(file);
     stream.push(":Zone.Identifier");

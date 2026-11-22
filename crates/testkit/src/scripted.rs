@@ -1,5 +1,3 @@
-//! A process runner that replays recorded tool runs.
-
 use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::io;
