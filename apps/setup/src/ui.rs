@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 
-use pastegrab_deploy::Entry;
+use pastegrab_deploy::{Entry, launch};
 use pastegrab_i18n::RU;
 use windows::Wdk::System::SystemServices::RtlGetVersion;
 use windows::Win32::Foundation::{HWND, LPARAM, S_FALSE, S_OK, WPARAM};
@@ -203,6 +203,7 @@ impl Dialog {
         let size_kib = u32::try_from(self.unpacked / 1024).unwrap_or(u32::MAX);
         thread::spawn(move || {
             let result = pastegrab_deploy::install(payload, &dest, &shared.read)
+                .and_then(|()| first_state(&dest))
                 .and_then(|()| register(&dest, size_kib))
                 .map_err(|e| e.to_string());
             *shared
@@ -247,8 +248,16 @@ impl Dialog {
     }
 }
 
+/// The launcher, which starts the version `state.json` names.
 fn program(dest: &Path) -> PathBuf {
-    dest.join("app").join("pastegrab.exe")
+    dest.join("pastegrab.exe")
+}
+
+/// The launcher's first `state.json`, naming the version the payload carries.
+fn first_state(dest: &Path) -> io::Result<()> {
+    let state = launch::state(dest)
+        .ok_or_else(|| io::Error::other("the payload carries no version of pastegrab"))?;
+    launch::write_state(dest, &state)
 }
 
 fn register(dest: &Path, size_kib: u32) -> io::Result<()> {
