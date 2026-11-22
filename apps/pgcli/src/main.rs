@@ -23,6 +23,7 @@ use pastegrab_domain::job::{JobState, Permits};
 use pastegrab_domain::plan::Machine;
 use pastegrab_domain::profile::ProfileKind;
 use pastegrab_ffmpeg::{Ffmpeg, Tools};
+use pastegrab_http::Direct;
 use pastegrab_os::{LocalFiles, LocalRunner};
 use pastegrab_ytdlp::{Engine, YtDlp};
 
@@ -127,8 +128,8 @@ fn run() -> Result<ExitCode, String> {
         return Ok(plan::run(&ytdlp, &text, options.profile, machine, &data));
     }
     let ports = Ports {
-        resolvers: vec![Box::new(ytdlp.clone())],
-        fetchers: vec![Box::new(ytdlp)],
+        resolvers: vec![Box::new(Direct::default()), Box::new(ytdlp.clone())],
+        fetchers: vec![Box::new(Direct::default()), Box::new(ytdlp)],
         probe: Box::new(ffmpeg.clone()),
         transcoder: Box::new(ffmpeg),
         files: Box::new(LocalFiles),

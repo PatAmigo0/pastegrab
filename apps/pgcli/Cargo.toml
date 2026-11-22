@@ -12,6 +12,7 @@ pastegrab-app = { path = "../../crates/app" }
 pastegrab-cli = { path = "../../crates/cli" }
 pastegrab-domain = { path = "../../crates/domain" }
 pastegrab-ffmpeg = { path = "../../crates/ffmpeg" }
+pastegrab-http = { path = "../../crates/http" }
 pastegrab-os = { path = "../../crates/os" }
 pastegrab-ytdlp = { path = "../../crates/ytdlp" }
 
