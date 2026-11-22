@@ -74,6 +74,7 @@ pub const RU: Strings = Strings {
     duration,
     more: |n| format!("и ещё {n}"),
     window_title: "pastegrab",
+    cannot_start: "pastegrab не запускается. Скачайте установщик и установите программу заново.",
     notices: Notices {
         done: "Видео скачано",
         failed: "Видео не скачалось",

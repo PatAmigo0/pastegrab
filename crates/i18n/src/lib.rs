@@ -46,6 +46,8 @@ pub struct Strings {
     pub more: fn(usize) -> String,
     /// The window's title.
     pub window_title: &'static str,
+    /// When the launcher finds no version to start, above the technical reason.
+    pub cannot_start: &'static str,
     /// The tray notification for a job that ended while the window was in the background.
     pub notices: Notices,
     /// The installer.
